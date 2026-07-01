@@ -1,0 +1,11 @@
+{
+    "schema_version": 1,
+    "commit": "HEAD",
+    "indexed_at": "2026-07-01T15:18:05Z",
+    "project": "Users-jcap-Dev-sparks-cli",
+    "nodes": 214,
+    "edges": 472,
+    "original_size": 1310720,
+    "compressed_size": 35655,
+    "compression_level": 9
+}

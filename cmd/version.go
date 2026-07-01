@@ -1,0 +1,25 @@
+package cmd
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
+
+var (
+	version = "0.1.0"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
+func newVersionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Display version information",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprintf(stdout(cmd), "sparks %s\ncommit: %s\nbuilt: %s\n", version, commit, date)
+			return err
+		},
+	}
+}

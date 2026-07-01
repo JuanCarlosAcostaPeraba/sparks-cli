@@ -1,0 +1,61 @@
+version: 2
+
+project_name: sparks
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: sparks
+    main: .
+    binary: sparks
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X github.com/JuanCarlosAcostaPeraba/sparks-cli/cmd.version={{.Version}} -X github.com/JuanCarlosAcostaPeraba/sparks-cli/cmd.commit={{.Commit}} -X github.com/JuanCarlosAcostaPeraba/sparks-cli/cmd.date={{.Date}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+brews:
+  - name: sparks
+    repository:
+      owner: JuanCarlosAcostaPeraba
+      name: homebrew-tap
+    directory: Formula
+    homepage: "https://github.com/JuanCarlosAcostaPeraba/sparks-cli"
+    description: "A tiny, fast CLI to capture ideas, tasks and nested thoughts without leaving your terminal."
+    license: MIT
+    install: |
+      bin.install "sparks"
+    test: |
+      system "#{bin}/sparks", "version"
