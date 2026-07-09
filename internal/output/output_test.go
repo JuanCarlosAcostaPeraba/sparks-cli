@@ -23,7 +23,7 @@ func TestSparksTextOutput(t *testing.T) {
 	}
 
 	got := buf.String()
-	for _, want := range []string{"□ 1) Prepare Codex prompt", "❗ 2) Publish Homebrew tap", "☑ 3) Initial README"} {
+	for _, want := range []string{"STATUS  ID  TITLE", "□       1   Prepare Codex prompt", "❗       2   Publish Homebrew tap", "☑       3   Initial README"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in output %q", want, got)
 		}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/model"
 )
@@ -17,10 +18,20 @@ func Sparks(w io.Writer, sparks []model.Spark, asJSON bool) error {
 		return enc.Encode(sparks)
 	}
 
-	for _, spark := range sparks {
-		fmt.Fprintf(w, "%s %d) %s\n", symbol(spark), spark.ID, spark.Title)
+	return table(w, sparks)
+}
+
+func table(w io.Writer, sparks []model.Spark) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "STATUS\tID\tTITLE"); err != nil {
+		return err
 	}
-	return nil
+	for _, spark := range sparks {
+		if _, err := fmt.Fprintf(tw, "%s\t%d\t%s\n", symbol(spark), spark.ID, spark.Title); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
 }
 
 func Tree(w io.Writer, sparks []model.Spark, asJSON bool) error {
