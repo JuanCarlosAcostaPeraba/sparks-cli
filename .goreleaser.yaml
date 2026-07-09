@@ -45,19 +45,3 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
-
-homebrew_casks:
-  - name: sparks
-    repository:
-      owner: JuanCarlosAcostaPeraba
-      name: homebrew-tap
-      branch: main
-    directory: Casks
-    homepage: "https://github.com/JuanCarlosAcostaPeraba/sparks-cli"
-    description: "A tiny, fast CLI to capture ideas, tasks and nested thoughts without leaving your terminal."
-    license: MIT
-    binaries:
-      - sparks
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com

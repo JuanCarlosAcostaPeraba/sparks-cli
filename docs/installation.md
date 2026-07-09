@@ -2,18 +2,9 @@
 
 ## Homebrew
 
-```bash
-brew tap JuanCarlosAcostaPeraba/tap
-brew install --cask sparks
-```
-
-Or:
-
-```bash
-brew install --cask JuanCarlosAcostaPeraba/tap/sparks
-```
-
-The Homebrew cask is published to [JuanCarlosAcostaPeraba/homebrew-tap](https://github.com/JuanCarlosAcostaPeraba/homebrew-tap) when a version tag triggers the release workflow.
+Homebrew distribution is planned. The correct path for an open-source Go CLI is
+a formula submitted to Homebrew's `homebrew/core`, subject to Homebrew's
+acceptance criteria.
 
 ## Manual
 
