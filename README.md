@@ -10,14 +10,16 @@ A tiny, fast CLI to capture ideas, tasks and nested thoughts without leaving you
 
 ```bash
 brew tap JuanCarlosAcostaPeraba/tap
-brew install sparks
+brew install --cask sparks
 ```
 
 Or:
 
 ```bash
-brew install JuanCarlosAcostaPeraba/tap/sparks
+brew install --cask JuanCarlosAcostaPeraba/tap/sparks
 ```
+
+The cask is published from [JuanCarlosAcostaPeraba/homebrew-tap](https://github.com/JuanCarlosAcostaPeraba/homebrew-tap) by the tag-triggered GoReleaser workflow.
 
 ### Manual binaries
 
@@ -80,7 +82,7 @@ go run . list
 
 ## Releases
 
-Releases are handled by GoReleaser. Tag-based GitHub Actions builds publish archives, checksums and Homebrew tap updates.
+Releases are handled by GoReleaser. Tag-based GitHub Actions builds publish archives, checksums and Homebrew tap updates. The release workflow needs the repository secret `GH_PAT` with write access to `JuanCarlosAcostaPeraba/homebrew-tap`.
 
 ```bash
 git tag v0.1.0
