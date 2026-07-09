@@ -60,6 +60,44 @@ func TestRootCommandAddsChildSpark(t *testing.T) {
 	}
 }
 
+func TestRootCommandHelpIsExplanatory(t *testing.T) {
+	out, errOut, err := runCommand(t, "", "--help")
+	if err != nil {
+		t.Fatalf("help failed: %v\nstderr: %s", err, errOut)
+	}
+	for _, want := range []string{
+		"sparks captures ideas, tasks and nested thoughts",
+		"Run sparks with no command to list active items.",
+		"Create sub-ideas with add --parent <id>",
+		"sparks add --parent 1 \"Document install steps\"",
+		"Available Commands:",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in help output: %q", want, out)
+		}
+	}
+}
+
+func TestAddAliasHelpIsCommandSpecific(t *testing.T) {
+	out, errOut, err := runCommand(t, "", "+", "-h")
+	if err != nil {
+		t.Fatalf("add help failed: %v\nstderr: %s", err, errOut)
+	}
+	for _, want := range []string{
+		"Add a new spark from a short piece of text.",
+		"To create a sub-idea, pass --parent",
+		"sparks + \"Fix install docs\"",
+		"--parent string   add as a child of the given spark ID",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in add help output: %q", want, out)
+		}
+	}
+	if strings.Contains(out, "Available Commands:") {
+		t.Fatalf("expected add help to stay command-specific, got: %q", out)
+	}
+}
+
 func runCommand(t *testing.T, dbPath string, args ...string) (string, string, error) {
 	t.Helper()
 	var out bytes.Buffer

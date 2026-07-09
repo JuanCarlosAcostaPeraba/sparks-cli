@@ -18,7 +18,13 @@ func newClearCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear",
 		Short: "Clear completed sparks",
-		Args:  cobra.NoArgs,
+		Long: `Clear completed sparks from active storage.
+
+Without flags, clear removes only completed sparks. Use --all --yes when you
+intentionally want to clear every spark in the current database.`,
+		Example: `  sparks clear
+  sparks clear --all --yes`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.all && !opts.yes {
 				return errors.New("clearing all sparks requires --yes")

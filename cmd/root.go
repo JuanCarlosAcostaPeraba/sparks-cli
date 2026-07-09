@@ -26,8 +26,21 @@ func NewRootCommand(out, errOut io.Writer) *cobra.Command {
 	opts := &rootOptions{out: out, errOut: errOut}
 
 	root := &cobra.Command{
-		Use:           "sparks",
-		Short:         "A tiny, fast CLI to capture ideas, tasks and nested thoughts.",
+		Use:   "sparks",
+		Short: "A tiny, fast CLI to capture ideas, tasks and nested thoughts.",
+		Long: `sparks captures ideas, tasks and nested thoughts without leaving the terminal.
+
+Run sparks with no command to list active items. Use add, done, important,
+remove, search and tree to keep lightweight notes organized in a local SQLite
+database stored in your application data directory.
+
+Create sub-ideas with add --parent <id>, where <id> is the parent spark ID
+shown by list or JSON output.`,
+		Example: `  sparks
+  sparks add "Prepare release notes"
+  sparks add --parent 1 "Document install steps"
+  sparks tree
+  sparks done 2`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -36,7 +49,7 @@ func NewRootCommand(out, errOut io.Writer) *cobra.Command {
 	}
 	root.SetOut(out)
 	root.SetErr(errOut)
-	root.PersistentFlags().StringVar(&opts.dbPath, "db", "", "database path")
+	root.PersistentFlags().StringVar(&opts.dbPath, "db", "", "use a specific SQLite database path")
 	root.SetContext(withRootOptions(context.Background(), opts))
 
 	root.AddCommand(newListCommand())

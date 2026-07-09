@@ -11,7 +11,13 @@ func newImportantCommand() *cobra.Command {
 		Use:     "important <id>",
 		Aliases: []string{"!"},
 		Short:   "Toggle important status",
-		Args:    requireArgs(1),
+		Long: `Toggle whether a spark is marked as important.
+
+Important sparks are listed before normal sparks. Running the command again
+removes the important mark.`,
+		Example: `  sparks important 3
+  sparks ! 3`,
+		Args: requireArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return handleRun(cmd, func(application *app.App) error {
 				spark, err := application.Important(cmd.Context(), args[0])

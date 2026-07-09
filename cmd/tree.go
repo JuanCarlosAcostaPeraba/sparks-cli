@@ -17,7 +17,15 @@ func newTreeCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tree",
 		Short: "Display sparks as a tree",
-		Args:  cobra.NoArgs,
+		Long: `Display sparks in their parent-child structure.
+
+Tree output is useful for nested thoughts. Visible tree numbers are based on
+position, such as 1, 1.1 and 1.1.1. Command arguments still use the real spark
+ID shown by list and JSON output.`,
+		Example: `  sparks tree
+  sparks tree --all
+  sparks tree --json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return handleRun(cmd, func(application *app.App) error {
 				sparks, err := application.List(cmd.Context(), model.ListOptions{IncludeDone: opts.all})

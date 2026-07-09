@@ -17,7 +17,14 @@ func newSearchCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search \"query\"",
 		Short: "Search sparks by title",
-		Args:  requireArgs(1),
+		Long: `Search sparks by title.
+
+Search is case-insensitive and returns active sparks by default. Use --all to
+include completed sparks and --json for scripts or integrations.`,
+		Example: `  sparks search "release"
+  sparks search --all "docs"
+  sparks search "homebrew" --json`,
+		Args: requireArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return handleRun(cmd, func(application *app.App) error {
 				sparks, err := application.Search(cmd.Context(), args[0], model.ListOptions{IncludeDone: opts.all})

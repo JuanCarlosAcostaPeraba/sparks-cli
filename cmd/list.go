@@ -18,7 +18,14 @@ func newListCommand() *cobra.Command {
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List active sparks",
-		Args:    cobra.NoArgs,
+		Long: `List sparks in a compact table.
+
+By default, list shows active sparks only. Use --all to include completed
+sparks, or --json when another tool needs structured output.`,
+		Example: `  sparks list
+  sparks ls --all
+  sparks list --json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListWithOptions(cmd, opts)
 		},
