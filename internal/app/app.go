@@ -12,7 +12,7 @@ import (
 )
 
 type Repository interface {
-	Add(context.Context, string) (model.Spark, error)
+	Add(context.Context, string, model.AddOptions) (model.Spark, error)
 	List(context.Context, model.ListOptions) ([]model.Spark, error)
 	Search(context.Context, string, model.ListOptions) ([]model.Spark, error)
 	MarkDone(context.Context, int64) (model.Spark, error)
@@ -26,15 +26,29 @@ type App struct {
 	repo Repository
 }
 
+type AddOptions struct {
+	Parent string
+}
+
 func New(repo Repository) *App {
 	return &App{repo: repo}
 }
 
-func (a *App) Add(ctx context.Context, title string) (model.Spark, error) {
+func (a *App) Add(ctx context.Context, title string, opts AddOptions) (model.Spark, error) {
 	if strings.TrimSpace(title) == "" {
 		return model.Spark{}, errors.New("add a spark title, for example: sparks add \"ship v0.1.0\"")
 	}
-	return a.repo.Add(ctx, title)
+
+	addOpts := model.AddOptions{}
+	if strings.TrimSpace(opts.Parent) != "" {
+		parentID, err := ParseID(opts.Parent)
+		if err != nil {
+			return model.Spark{}, fmt.Errorf("invalid parent id: %w", err)
+		}
+		addOpts.ParentID = &parentID
+	}
+
+	return a.repo.Add(ctx, title, addOpts)
 }
 
 func (a *App) List(ctx context.Context, opts model.ListOptions) ([]model.Spark, error) {

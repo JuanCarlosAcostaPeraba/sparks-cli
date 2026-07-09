@@ -42,6 +42,24 @@ func TestRootCommandJSONList(t *testing.T) {
 	}
 }
 
+func TestRootCommandAddsChildSpark(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "sparks.db")
+	if _, _, err := runCommand(t, dbPath, "add", "Parent idea"); err != nil {
+		t.Fatal(err)
+	}
+	if _, errOut, err := runCommand(t, dbPath, "add", "--parent", "1", "Child idea"); err != nil {
+		t.Fatalf("add child failed: %v\nstderr: %s", err, errOut)
+	}
+
+	out, errOut, err := runCommand(t, dbPath, "tree")
+	if err != nil {
+		t.Fatalf("tree failed: %v\nstderr: %s", err, errOut)
+	}
+	if !strings.Contains(out, "└─ □ 1) Parent idea") || !strings.Contains(out, "   └─ □ 2) Child idea") {
+		t.Fatalf("unexpected tree output: %q", out)
+	}
+}
+
 func runCommand(t *testing.T, dbPath string, args ...string) (string, string, error) {
 	t.Helper()
 	var out bytes.Buffer

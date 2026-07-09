@@ -34,6 +34,7 @@ sparks
 sparks list
 sparks add "Prepare Codex prompt"
 sparks + "Create Homebrew tap"
+sparks add --parent 1 "Add release notes"
 sparks done 3
 sparks ok 3
 sparks important 3
@@ -51,9 +52,10 @@ sparks version
 The default command lists active sparks.
 
 ```txt
-□ 1) Prepare Codex prompt
-❗ 2) Publish Homebrew tap
-☑ 3) Initial README
+STATUS  ID  TITLE
+□       1   Prepare Codex prompt
+❗       2   Publish Homebrew tap
+☑       3   Initial README
 ```
 
 Most list-style commands support `--json`.

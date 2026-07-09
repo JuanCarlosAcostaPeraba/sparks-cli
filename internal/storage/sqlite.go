@@ -79,16 +79,21 @@ CREATE INDEX IF NOT EXISTS idx_sparks_title ON sparks(title);
 	return nil
 }
 
-func (s *Store) Add(ctx context.Context, title string) (model.Spark, error) {
+func (s *Store) Add(ctx context.Context, title string, opts model.AddOptions) (model.Spark, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return model.Spark{}, errors.New("spark title cannot be empty")
 	}
+	if opts.ParentID != nil {
+		if _, err := s.Get(ctx, *opts.ParentID); err != nil {
+			return model.Spark{}, err
+		}
+	}
 
 	now := time.Now().UTC().Truncate(time.Second)
 	res, err := s.db.ExecContext(ctx, `
-INSERT INTO sparks (title, created_at, updated_at)
-VALUES (?, ?, ?)`, title, now, now)
+INSERT INTO sparks (title, parent_id, created_at, updated_at)
+VALUES (?, ?, ?, ?)`, title, opts.ParentID, now, now)
 	if err != nil {
 		return model.Spark{}, fmt.Errorf("add spark: %w", err)
 	}

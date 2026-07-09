@@ -19,3 +19,7 @@ type ListOptions struct {
 	IncludeDone bool
 	IncludeAll  bool
 }
+
+type AddOptions struct {
+	ParentID *int64
+}

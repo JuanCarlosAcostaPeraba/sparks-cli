@@ -12,7 +12,7 @@ import (
 func TestStoreInitializesAndAddsSpark(t *testing.T) {
 	store := newStore(t)
 
-	spark, err := store.Add(context.Background(), "Create GoReleaser config")
+	spark, err := store.Add(context.Background(), "Create GoReleaser config", model.AddOptions{})
 	if err != nil {
 		t.Fatalf("Add returned error: %v", err)
 	}
@@ -27,11 +27,11 @@ func TestStoreInitializesAndAddsSpark(t *testing.T) {
 func TestStoreListsActiveSparks(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-	first, err := store.Add(ctx, "active")
+	first, err := store.Add(ctx, "active", model.AddOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := store.Add(ctx, "done")
+	second, err := store.Add(ctx, "done", model.AddOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestStoreListsActiveSparks(t *testing.T) {
 func TestStoreMarksDone(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-	spark, err := store.Add(ctx, "finish tests")
+	spark, err := store.Add(ctx, "finish tests", model.AddOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestStoreMarksDone(t *testing.T) {
 func TestStoreTogglesImportant(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-	spark, err := store.Add(ctx, "publish tap")
+	spark, err := store.Add(ctx, "publish tap", model.AddOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestStoreTogglesImportant(t *testing.T) {
 func TestStoreSoftRemovesSpark(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-	spark, err := store.Add(ctx, "remove me")
+	spark, err := store.Add(ctx, "remove me", model.AddOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,10 +117,10 @@ func TestStoreSoftRemovesSpark(t *testing.T) {
 func TestStoreSearchesSparks(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-	if _, err := store.Add(ctx, "Prepare Codex prompt"); err != nil {
+	if _, err := store.Add(ctx, "Prepare Codex prompt", model.AddOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Add(ctx, "Publish Homebrew tap"); err != nil {
+	if _, err := store.Add(ctx, "Publish Homebrew tap", model.AddOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,6 +130,34 @@ func TestStoreSearchesSparks(t *testing.T) {
 	}
 	if len(results) != 1 || results[0].Title != "Prepare Codex prompt" {
 		t.Fatalf("unexpected search results: %#v", results)
+	}
+}
+
+func TestStoreAddsChildSpark(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	parent, err := store.Add(ctx, "parent", model.AddOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	child, err := store.Add(ctx, "child", model.AddOptions{ParentID: &parent.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child.ParentID == nil || *child.ParentID != parent.ID {
+		t.Fatalf("expected parent id %d, got %#v", parent.ID, child.ParentID)
+	}
+}
+
+func TestStoreRejectsMissingParent(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	parentID := int64(999)
+
+	_, err := store.Add(ctx, "child", model.AddOptions{ParentID: &parentID})
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
 
