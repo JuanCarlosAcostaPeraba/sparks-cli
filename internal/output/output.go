@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -49,28 +50,37 @@ func Tree(w io.Writer, sparks []model.Spark, asJSON bool) error {
 		byParent[*spark.ParentID] = append(byParent[*spark.ParentID], spark)
 	}
 
-	var walk func(items []model.Spark, prefix string)
-	walk = func(items []model.Spark, prefix string) {
+	var walk func(items []model.Spark, prefix string, parentNumber string)
+	walk = func(items []model.Spark, prefix string, parentNumber string) {
 		sort.SliceStable(items, func(i, j int) bool {
 			return items[i].ID < items[j].ID
 		})
 		for i, spark := range items {
+			number := treeNumber(parentNumber, i+1)
 			connector := "├─"
 			nextPrefix := prefix + "│  "
 			if i == len(items)-1 {
 				connector = "└─"
 				nextPrefix = prefix + "   "
 			}
-			fmt.Fprintf(w, "%s%s %s %d) %s\n", prefix, connector, symbol(spark), spark.ID, spark.Title)
-			walk(byParent[spark.ID], nextPrefix)
+			fmt.Fprintf(w, "%s%s %s %s) %s\n", prefix, connector, symbol(spark), number, spark.Title)
+			walk(byParent[spark.ID], nextPrefix, number)
 		}
 	}
 
 	if len(roots) == 0 {
 		return nil
 	}
-	walk(roots, "")
+	walk(roots, "", "")
 	return nil
+}
+
+func treeNumber(parent string, position int) string {
+	current := strconv.Itoa(position)
+	if parent == "" {
+		return current
+	}
+	return parent + "." + current
 }
 
 func Message(w io.Writer, format string, args ...any) {

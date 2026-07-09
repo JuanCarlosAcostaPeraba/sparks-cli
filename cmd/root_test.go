@@ -55,7 +55,7 @@ func TestRootCommandAddsChildSpark(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tree failed: %v\nstderr: %s", err, errOut)
 	}
-	if !strings.Contains(out, "└─ □ 1) Parent idea") || !strings.Contains(out, "   └─ □ 2) Child idea") {
+	if !strings.Contains(out, "└─ □ 1) Parent idea") || !strings.Contains(out, "   └─ □ 1.1) Child idea") {
 		t.Fatalf("unexpected tree output: %q", out)
 	}
 }

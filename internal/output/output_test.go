@@ -46,3 +46,24 @@ func TestSparksJSONOutput(t *testing.T) {
 		t.Fatalf("unexpected JSON output: %#v", decoded)
 	}
 }
+
+func TestTreeUsesHierarchicalNumbers(t *testing.T) {
+	parentID := int64(10)
+	childID := int64(20)
+	sparks := []model.Spark{
+		{ID: parentID, Title: "Parent idea"},
+		{ID: childID, Title: "Child idea", ParentID: &parentID},
+		{ID: 30, Title: "Nested idea", ParentID: &childID},
+	}
+	var buf bytes.Buffer
+	if err := output.Tree(&buf, sparks, false); err != nil {
+		t.Fatal(err)
+	}
+
+	got := buf.String()
+	for _, want := range []string{"└─ □ 1) Parent idea", "   └─ □ 1.1) Child idea", "      └─ □ 1.1.1) Nested idea"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in output %q", want, got)
+		}
+	}
+}
