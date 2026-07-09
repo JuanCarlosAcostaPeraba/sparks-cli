@@ -14,7 +14,29 @@ acceptance criteria.
 
 ### Manual binaries
 
-Download the archive for your platform from the GitHub Releases page, extract it, and place the `sparks` binary on your `PATH`.
+Download the archive for your platform from the [GitHub Releases page](https://github.com/JuanCarlosAcostaPeraba/sparks-cli/releases), extract it, and place the `sparks` binary on your `PATH`.
+
+For Apple Silicon macOS:
+
+```bash
+curl -L -o sparks.tar.gz https://github.com/JuanCarlosAcostaPeraba/sparks-cli/releases/download/v0.1.0/sparks_0.1.0_darwin_arm64.tar.gz
+tar -xzf sparks.tar.gz
+mkdir -p ~/.local/bin
+mv sparks ~/.local/bin/sparks
+chmod +x ~/.local/bin/sparks
+```
+
+For Intel macOS:
+
+```bash
+curl -L -o sparks.tar.gz https://github.com/JuanCarlosAcostaPeraba/sparks-cli/releases/download/v0.1.0/sparks_0.1.0_darwin_amd64.tar.gz
+tar -xzf sparks.tar.gz
+mkdir -p ~/.local/bin
+mv sparks ~/.local/bin/sparks
+chmod +x ~/.local/bin/sparks
+```
+
+Make sure `~/.local/bin` is on your `PATH`.
 
 ### Windows
 
@@ -91,7 +113,6 @@ git push origin v0.1.0
 - Tests
 - GitHub Actions
 - GoReleaser config
-- Homebrew Tap config
 
 ### v0.2.0
 
