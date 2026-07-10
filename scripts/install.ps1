@@ -34,13 +34,44 @@ $ArchivePath = Join-Path $TempDir $Asset
 
 New-Item -ItemType Directory -Path $TempDir | Out-Null
 
+function Build-FromLocalCheckout {
+    if (-not (Test-Path "go.mod")) {
+        throw "sparks installer: release download failed and no local Go module was found."
+    }
+
+    $Module = Get-Content -Path "go.mod" -TotalCount 1
+    if ($Module -ne "module github.com/JuanCarlosAcostaPeraba/sparks-cli") {
+        throw "sparks installer: release download failed and this directory is not sparks-cli."
+    }
+
+    $Go = Get-Command go -ErrorAction SilentlyContinue
+    if (-not $Go) {
+        throw "sparks installer: release download failed and Go is not available for a local build."
+    }
+
+    $LocalBinary = Join-Path $TempDir "sparks.exe"
+    Write-Host "Release download failed; building sparks from this local checkout..."
+    & go build -o $LocalBinary .
+    if ($LASTEXITCODE -ne 0) {
+        throw "sparks installer: local build failed."
+    }
+
+    return $LocalBinary
+}
+
 try {
     Write-Host "Installing sparks $Tag for windows/$Arch..."
-    Invoke-WebRequest -Uri $Url -OutFile $ArchivePath
-    Expand-Archive -Path $ArchivePath -DestinationPath $TempDir -Force
+    $BinaryPath = Join-Path $TempDir "sparks.exe"
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $ArchivePath
+        Expand-Archive -Path $ArchivePath -DestinationPath $TempDir -Force
+    }
+    catch {
+        $BinaryPath = Build-FromLocalCheckout
+    }
 
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    Copy-Item -Path (Join-Path $TempDir "sparks.exe") -Destination (Join-Path $InstallDir "sparks.exe") -Force
+    Copy-Item -Path $BinaryPath -Destination (Join-Path $InstallDir "sparks.exe") -Force
 
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
     $PathEntries = $UserPath -split ";" | Where-Object { $_ }
