@@ -6,41 +6,41 @@ A tiny, fast CLI to capture ideas, tasks and nested thoughts without leaving you
 
 ## Installation
 
-### Homebrew
+### macOS and Linux
 
-Homebrew distribution is planned. The correct path for an open-source Go CLI is
-a formula submitted to Homebrew's `homebrew/core`, subject to Homebrew's
-acceptance criteria.
-
-### Manual binaries
-
-Download the archive for your platform from the [GitHub Releases page](https://github.com/JuanCarlosAcostaPeraba/sparks-cli/releases), extract it, and place the `sparks` binary on your `PATH`.
-
-For Apple Silicon macOS:
+Install the latest release with one command:
 
 ```bash
-curl -L -o sparks.tar.gz https://github.com/JuanCarlosAcostaPeraba/sparks-cli/releases/download/v0.1.0/sparks_0.1.0_darwin_arm64.tar.gz
-tar -xzf sparks.tar.gz
-mkdir -p ~/.local/bin
-mv sparks ~/.local/bin/sparks
-chmod +x ~/.local/bin/sparks
+curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
 ```
 
-For Intel macOS:
-
-```bash
-curl -L -o sparks.tar.gz https://github.com/JuanCarlosAcostaPeraba/sparks-cli/releases/download/v0.1.0/sparks_0.1.0_darwin_amd64.tar.gz
-tar -xzf sparks.tar.gz
-mkdir -p ~/.local/bin
-mv sparks ~/.local/bin/sparks
-chmod +x ~/.local/bin/sparks
-```
-
-Make sure `~/.local/bin` is on your `PATH`.
+The installer downloads the matching release archive and places `sparks` in
+`~/.local/bin`.
 
 ### Windows
 
-Windows binaries are built by GoReleaser. Scoop and winget packaging are planned after the MVP.
+Install the latest release from PowerShell with one command:
+
+```powershell
+irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
+```
+
+The installer downloads the matching release archive, installs `sparks.exe` under
+`%LOCALAPPDATA%\Programs\sparks`, and adds that directory to your user `PATH`.
+
+### Options
+
+```bash
+SPARKS_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
+SPARKS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
+```
+
+```powershell
+$env:SPARKS_VERSION = "0.1.0"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
+$env:SPARKS_INSTALL_DIR = "$HOME\bin"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
+```
+
+Homebrew, Scoop, and winget packages are planned after the MVP.
 
 ## Usage
 
