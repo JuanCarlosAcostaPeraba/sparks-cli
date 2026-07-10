@@ -1,5 +1,7 @@
 $ErrorActionPreference = "Stop"
 
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 $Repo = "JuanCarlosAcostaPeraba/sparks-cli"
 $Version = if ($env:SPARKS_VERSION) { $env:SPARKS_VERSION } else { "latest" }
 $InstallDir = if ($env:SPARKS_INSTALL_DIR) { $env:SPARKS_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\sparks" }
