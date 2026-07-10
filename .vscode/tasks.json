@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "go: test all",
+      "type": "shell",
+      "command": "go test ./...",
+      "group": "test",
+      "problemMatcher": "$go"
+    },
+    {
+      "label": "go: vet all",
+      "type": "shell",
+      "command": "go vet ./...",
+      "problemMatcher": "$go"
+    },
+    {
+      "label": "go: staticcheck all",
+      "type": "shell",
+      "command": "staticcheck ./...",
+      "problemMatcher": "$go"
+    },
+    {
+      "label": "sparks: run with temp db",
+      "type": "shell",
+      "command": "go run . --db ${env:TEMP}\\sparks-dev.db list",
+      "problemMatcher": "$go"
+    }
+  ]
+}
