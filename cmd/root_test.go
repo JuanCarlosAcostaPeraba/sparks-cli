@@ -65,6 +65,16 @@ func TestRootCommandJSONList(t *testing.T) {
 	}
 }
 
+func TestVersionCommandPrintsOnlyVersion(t *testing.T) {
+	out, errOut, err := runCommand(t, "", "version")
+	if err != nil {
+		t.Fatalf("version failed: %v\nstderr: %s", err, errOut)
+	}
+	if out != "sparks 0.2.0\n" {
+		t.Fatalf("unexpected version output: %q", out)
+	}
+}
+
 func TestRootCommandShortAllFlag(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "sparks.db")
 	if _, _, err := runCommand(t, dbPath, "add", "Completed spark"); err != nil {
