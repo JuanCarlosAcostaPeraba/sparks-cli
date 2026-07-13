@@ -42,6 +42,67 @@ func TestRootCommandJSONList(t *testing.T) {
 	}
 }
 
+func TestRootCommandShortAllFlag(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "sparks.db")
+	if _, _, err := runCommand(t, dbPath, "add", "Completed spark"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runCommand(t, dbPath, "done", "1"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, errOut, err := runCommand(t, dbPath, "list", "-a")
+	if err != nil {
+		t.Fatalf("list -a failed: %v\nstderr: %s", err, errOut)
+	}
+	if !strings.Contains(out, "Completed spark") {
+		t.Fatalf("expected -a to include completed sparks, got: %q", out)
+	}
+}
+
+func TestCommandFlagShorthands(t *testing.T) {
+	tests := []struct {
+		command   string
+		flag      string
+		shorthand string
+	}{
+		{"", "db", "d"},
+		{"add", "parent", "p"},
+		{"list", "all", "a"},
+		{"list", "json", "j"},
+		{"clear", "all", "a"},
+		{"clear", "yes", "y"},
+		{"tree", "all", "a"},
+		{"tree", "json", "j"},
+		{"search", "all", "a"},
+		{"search", "json", "j"},
+	}
+
+	root := NewRootCommand(&bytes.Buffer{}, &bytes.Buffer{})
+	for _, tt := range tests {
+		t.Run(tt.command+"/"+tt.flag, func(t *testing.T) {
+			cmd := root
+			flags := root.PersistentFlags()
+			if tt.command != "" {
+				var err error
+				cmd, _, err = root.Find([]string{tt.command})
+				if err != nil {
+					t.Fatal(err)
+				}
+				flags = cmd.Flags()
+			}
+
+			flag := flags.Lookup(tt.flag)
+			if flag == nil {
+				t.Fatalf("flag --%s not found", tt.flag)
+			}
+			if flag.Shorthand != tt.shorthand {
+				t.Fatalf("--%s shorthand = %q, want %q", tt.flag, flag.Shorthand, tt.shorthand)
+			}
+		})
+	}
+}
+
 func TestRootCommandAddsChildSpark(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "sparks.db")
 	if _, _, err := runCommand(t, dbPath, "add", "Parent idea"); err != nil {
