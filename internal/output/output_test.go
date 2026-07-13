@@ -23,7 +23,7 @@ func TestSparksTextOutput(t *testing.T) {
 	}
 
 	got := buf.String()
-	for _, want := range []string{"STATUS  ID  TITLE", "□       1   Prepare Codex prompt", "❗       2   Publish Homebrew tap", "☑       3   Initial README"} {
+	for _, want := range []string{"STATUS  ID  TITLE", "[ ]     1   Prepare Codex prompt", "[!]     2   Publish Homebrew tap", "[x]     3   Initial README"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in output %q", want, got)
 		}
@@ -62,16 +62,16 @@ func TestColoredSparksStylesIDsAndStatesWithoutBreakingAlignment(t *testing.T) {
 	for _, want := range []string{
 		"\x1b[2mSTATUS  ID   TITLE\x1b[0m",
 		"\x1b[36m1\x1b[0m",
-		"\x1b[1;33m❗\x1b[0m",
+		"\x1b[1;33m[!]\x1b[0m",
 		"\x1b[1;33mImportant\x1b[0m",
-		"\x1b[32m☑\x1b[0m",
+		"\x1b[32m[x]\x1b[0m",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in colored output %q", want, got)
 		}
 	}
 	plain := stripANSI(got)
-	for _, want := range []string{"STATUS  ID   TITLE", "□       1    Active", "❗       22   Important", "☑       333  Completed"} {
+	for _, want := range []string{"STATUS  ID   TITLE", "[ ]     1    Active", "[!]     22   Important", "[x]     333  Completed"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("expected aligned %q in stripped output %q", want, plain)
 		}
@@ -118,7 +118,7 @@ func TestTreeUsesHierarchicalNumbers(t *testing.T) {
 	}
 
 	got := buf.String()
-	for _, want := range []string{"└─ □ 1) Parent idea", "   └─ □ 1.1) Child idea", "      └─ □ 1.1.1) Nested idea"} {
+	for _, want := range []string{"└─ [ ] 1) Parent idea", "   └─ [ ] 1.1) Child idea", "      └─ [ ] 1.1.1) Nested idea"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in output %q", want, got)
 		}

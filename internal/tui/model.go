@@ -291,12 +291,12 @@ func (m Model) View() string {
 		return view.String()
 	}
 
-	view.WriteString(m.palette.Paint(presentation.Muted, "  SEL  ID     STATE       TITLE"))
+	view.WriteString(m.palette.Paint(presentation.Muted, "  SEL  ID     STATE          TITLE"))
 	if m.width >= 72 {
 		view.WriteString(m.palette.Paint(presentation.Muted, "                            PARENT"))
 	}
 	view.WriteByte('\n')
-	view.WriteString(m.palette.Paint(presentation.Muted, "  ───  ─────  ──────────  ─────────────────────────────"))
+	view.WriteString(m.palette.Paint(presentation.Muted, "  ───  ─────  ─────────────  ─────────────────────────────"))
 	if m.width >= 72 {
 		view.WriteString(m.palette.Paint(presentation.Muted, "  ──────"))
 	}
@@ -310,12 +310,9 @@ func (m Model) View() string {
 			if index == m.cursor {
 				pointer = ">"
 			}
-			state := "active"
-			if spark.Important {
-				state = "important"
-			}
+			state := presentation.StateFor(spark.Done, spark.Important)
 			title := truncate(spark.Title, 36)
-			row := fmt.Sprintf("   %s   #%-4d  %-10s  %-36s", pointer, spark.ID, state, title)
+			row := fmt.Sprintf("   %s   #%-4d  %-13s  %-36s", pointer, spark.ID, state.Text(), title)
 			if m.width >= 72 {
 				parent := "—"
 				if spark.ParentID != nil {
@@ -377,10 +374,11 @@ func (m Model) colorRow(row string, spark model.Spark) string {
 	if idStart >= 0 {
 		row = row[:idStart] + m.palette.Paint(presentation.ID, id) + row[idStart+len(id):]
 	}
-	if spark.Important {
-		stateStart := strings.Index(row, "important")
+	state := presentation.StateFor(spark.Done, spark.Important)
+	if state.Role == presentation.Important || state.Role == presentation.Completed {
+		stateStart := strings.Index(row, state.Text())
 		if stateStart >= 0 {
-			row = row[:stateStart] + m.palette.Paint(presentation.Important, "important") + row[stateStart+len("important"):]
+			row = row[:stateStart] + m.palette.Paint(state.Role, state.Text()) + row[stateStart+len(state.Text()):]
 		}
 	}
 	return row

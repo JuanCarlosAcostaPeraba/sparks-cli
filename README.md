@@ -84,9 +84,9 @@ fallback so scripts can send regular commands followed by `exit` or `quit`.
 
 ```txt
 STATUS  ID  TITLE
-□       1   Prepare Codex prompt
-❗       2   Publish Homebrew tap
-☑       3   Initial README
+[ ]     1   Prepare Codex prompt
+[!]     2   Publish Homebrew tap
+[x]     3   Initial README
 ```
 
 Flags have short aliases: `-a` for `--all`, `-j` for `--json`, `-p` for
