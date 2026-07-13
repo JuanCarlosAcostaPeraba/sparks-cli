@@ -13,6 +13,7 @@ import (
 
 type Repository interface {
 	Add(context.Context, string, model.AddOptions) (model.Spark, error)
+	UpdateTitle(context.Context, int64, string) (model.Spark, error)
 	List(context.Context, model.ListOptions) ([]model.Spark, error)
 	Search(context.Context, string, model.ListOptions) ([]model.Spark, error)
 	MarkDone(context.Context, int64) (model.Spark, error)
@@ -49,6 +50,18 @@ func (a *App) Add(ctx context.Context, title string, opts AddOptions) (model.Spa
 	}
 
 	return a.repo.Add(ctx, title, addOpts)
+}
+
+func (a *App) Edit(ctx context.Context, rawID, title string) (model.Spark, error) {
+	id, err := ParseID(rawID)
+	if err != nil {
+		return model.Spark{}, err
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return model.Spark{}, errors.New("provide a new title, for example: sparks edit 3 \"ship v0.2.0\"")
+	}
+	return a.repo.UpdateTitle(ctx, id, title)
 }
 
 func (a *App) List(ctx context.Context, opts model.ListOptions) ([]model.Spark, error) {

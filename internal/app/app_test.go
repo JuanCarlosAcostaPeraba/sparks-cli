@@ -51,15 +51,61 @@ func TestAddRejectsInvalidParentID(t *testing.T) {
 	}
 }
 
+func TestEditValidatesAndUpdatesTitle(t *testing.T) {
+	repo := &fakeRepo{}
+	application := app.New(repo)
+
+	spark, err := application.Edit(context.Background(), "42", "  updated title  ")
+	if err != nil {
+		t.Fatalf("Edit returned error: %v", err)
+	}
+	if repo.updateID != 42 || repo.updateTitle != "updated title" {
+		t.Fatalf("unexpected update call: id=%d title=%q", repo.updateID, repo.updateTitle)
+	}
+	if spark.Title != "updated title" {
+		t.Fatalf("unexpected spark: %#v", spark)
+	}
+}
+
+func TestEditRejectsInvalidInput(t *testing.T) {
+	repo := &fakeRepo{}
+	application := app.New(repo)
+
+	for _, test := range []struct {
+		id    string
+		title string
+	}{
+		{"invalid", "new title"},
+		{"1", "   "},
+	} {
+		if _, err := application.Edit(context.Background(), test.id, test.title); err == nil {
+			t.Fatalf("expected error for id=%q title=%q", test.id, test.title)
+		}
+	}
+	if repo.updateCalled {
+		t.Fatal("expected repository not to be called")
+	}
+}
+
 type fakeRepo struct {
-	addCalled bool
-	addOpts   model.AddOptions
+	addCalled    bool
+	addOpts      model.AddOptions
+	updateCalled bool
+	updateID     int64
+	updateTitle  string
 }
 
 func (f *fakeRepo) Add(_ context.Context, title string, opts model.AddOptions) (model.Spark, error) {
 	f.addCalled = true
 	f.addOpts = opts
 	return model.Spark{ID: 1, Title: title, ParentID: opts.ParentID}, nil
+}
+
+func (f *fakeRepo) UpdateTitle(_ context.Context, id int64, title string) (model.Spark, error) {
+	f.updateCalled = true
+	f.updateID = id
+	f.updateTitle = title
+	return model.Spark{ID: id, Title: title}, nil
 }
 
 func (f *fakeRepo) List(context.Context, model.ListOptions) ([]model.Spark, error) {

@@ -24,6 +24,34 @@ func TestStoreInitializesAndAddsSpark(t *testing.T) {
 	}
 }
 
+func TestStoreUpdatesSparkTitle(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	spark, err := store.Add(ctx, "old title", model.AddOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := store.UpdateTitle(ctx, spark.ID, "  new title  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Title != "new title" {
+		t.Fatalf("expected trimmed updated title, got %q", updated.Title)
+	}
+	if updated.ID != spark.ID || updated.CreatedAt != spark.CreatedAt {
+		t.Fatalf("expected identity and creation date to be preserved, got %#v", updated)
+	}
+}
+
+func TestStoreUpdateTitleRejectsMissingSpark(t *testing.T) {
+	store := newStore(t)
+	_, err := store.UpdateTitle(context.Background(), 999, "new title")
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestStoreListsActiveSparks(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()

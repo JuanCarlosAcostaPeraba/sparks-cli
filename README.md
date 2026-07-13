@@ -51,6 +51,8 @@ sparks list -a
 sparks add "Prepare Codex prompt"
 sparks + "Create Homebrew tap"
 sparks add --parent 1 "Add release notes"
+sparks edit 1 "Prepare release notes"
+sparks e 1 "Prepare release notes"
 sparks done 3
 sparks ok 3
 sparks important 3
@@ -109,7 +111,7 @@ git push origin v0.1.0
 ### v0.1.0
 
 - Core CLI
-- Add/list/done/important/remove/search/tree
+- Add/list/edit/done/important/remove/search/tree
 - SQLite storage
 - JSON output
 - Tests
@@ -118,7 +120,6 @@ git push origin v0.1.0
 
 ### v0.2.0
 
-- Edit command
 - Tags
 - Export/import
 - Shell completions

@@ -105,6 +105,26 @@ VALUES (?, ?, ?, ?)`, title, opts.ParentID, now, now)
 	return s.Get(ctx, id)
 }
 
+func (s *Store) UpdateTitle(ctx context.Context, id int64, title string) (model.Spark, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return model.Spark{}, errors.New("spark title cannot be empty")
+	}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	res, err := s.db.ExecContext(ctx, `
+UPDATE sparks
+SET title = ?, updated_at = ?
+WHERE id = ? AND deleted = 0`, title, now, id)
+	if err != nil {
+		return model.Spark{}, fmt.Errorf("update spark title: %w", err)
+	}
+	if err := ensureChanged(res); err != nil {
+		return model.Spark{}, err
+	}
+	return s.Get(ctx, id)
+}
+
 func (s *Store) Get(ctx context.Context, id int64) (model.Spark, error) {
 	row := s.db.QueryRowContext(ctx, `
 SELECT id, title, parent_id, important, done, deleted, created_at, updated_at, completed_at, deleted_at

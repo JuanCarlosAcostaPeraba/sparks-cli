@@ -27,6 +27,29 @@ func TestRootCommandAddAndList(t *testing.T) {
 	}
 }
 
+func TestRootCommandEditsSpark(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "sparks.db")
+	if _, _, err := runCommand(t, dbPath, "add", "Old title"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, errOut, err := runCommand(t, dbPath, "e", "1", "New title")
+	if err != nil {
+		t.Fatalf("edit failed: %v\nstderr: %s", err, errOut)
+	}
+	if !strings.Contains(out, "Updated spark 1") {
+		t.Fatalf("unexpected edit output: %q", out)
+	}
+
+	out, errOut, err = runCommand(t, dbPath, "list")
+	if err != nil {
+		t.Fatalf("list failed: %v\nstderr: %s", err, errOut)
+	}
+	if !strings.Contains(out, "New title") || strings.Contains(out, "Old title") {
+		t.Fatalf("unexpected list output: %q", out)
+	}
+}
+
 func TestRootCommandJSONList(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "sparks.db")
 	if _, _, err := runCommand(t, dbPath, "+", "Prepare Codex prompt"); err != nil {
