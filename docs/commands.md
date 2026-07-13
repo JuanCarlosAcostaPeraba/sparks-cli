@@ -17,6 +17,13 @@ sparks + "Create Homebrew tap"
 sparks add -p 1 "Create child spark"
 ```
 
+## Edit
+
+```bash
+sparks edit 3 "Ship v0.2.0"
+sparks e 3 "Ship v0.2.0"
+```
+
 ## Complete
 
 ```bash

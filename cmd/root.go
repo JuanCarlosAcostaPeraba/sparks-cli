@@ -30,7 +30,7 @@ func NewRootCommand(out, errOut io.Writer) *cobra.Command {
 		Short: "A tiny, fast CLI to capture ideas, tasks and nested thoughts.",
 		Long: `sparks captures ideas, tasks and nested thoughts without leaving the terminal.
 
-Run sparks with no command to list active items. Use add, done, important,
+Run sparks with no command to list active items. Use add, edit, done, important,
 remove, search and tree to keep lightweight notes organized in a local SQLite
 database stored in your application data directory.
 
@@ -54,6 +54,7 @@ shown by list or JSON output.`,
 
 	root.AddCommand(newListCommand())
 	root.AddCommand(newAddCommand())
+	root.AddCommand(newEditCommand())
 	root.AddCommand(newDoneCommand())
 	root.AddCommand(newImportantCommand())
 	root.AddCommand(newRemoveCommand())
