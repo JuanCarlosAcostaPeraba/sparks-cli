@@ -35,13 +35,6 @@ sparks, or --json when another tool needs structured output.`,
 	return cmd
 }
 
-func runList(cmd *cobra.Command, args []string) error {
-	if len(args) != 0 {
-		return cobra.NoArgs(cmd, args)
-	}
-	return runListWithOptions(cmd, &listOptions{})
-}
-
 func runListWithOptions(cmd *cobra.Command, opts *listOptions) error {
 	return handleRun(cmd, func(application *app.App) error {
 		sparks, err := application.List(cmd.Context(), model.ListOptions{IncludeDone: opts.all})

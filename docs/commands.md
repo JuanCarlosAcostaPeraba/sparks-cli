@@ -1,5 +1,18 @@
 # Commands
 
+## Interactive mode
+
+Run `sparks` without a subcommand to list active sparks and open an interactive
+prompt. Enter any regular command without the leading `sparks`, then use `exit`
+or `quit` to finish.
+
+```txt
+sparks> add "Prepare release notes"
+sparks> edit 1 "Prepare v0.2.0 release notes"
+sparks> done 1
+sparks> exit
+```
+
 ## List
 
 ```bash

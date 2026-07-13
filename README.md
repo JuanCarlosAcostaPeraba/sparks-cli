@@ -67,7 +67,16 @@ sparks search "codex"
 sparks version
 ```
 
-The default command lists active sparks.
+The default command starts an interactive session. It shows active sparks and
+accepts the same commands until you type `exit` or `quit`.
+
+```txt
+sparks> add "Prepare release notes"
+Added spark 1
+sparks> done 1
+Completed spark 1
+sparks> exit
+```
 
 ```txt
 STATUS  ID  TITLE
