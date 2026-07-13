@@ -109,5 +109,8 @@ sparks version
 sparks update
 ```
 
-The command downloads the latest platform archive from GitHub Releases,
-verifies it against `checksums.txt`, and replaces the current executable.
+The command detects the active shell and delegates to the official installer.
+`bash`, `zsh`, `fish`, and POSIX shells use the `curl` installer; Windows uses
+PowerShell after the running process exits. The installer keeps the active
+executable directory and verifies the archive against `checksums.txt`. Set
+`SPARKS_SHELL` to override shell detection on macOS or Linux.

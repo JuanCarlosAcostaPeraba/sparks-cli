@@ -1,42 +1,51 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"io"
 
 	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/output"
 	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/updater"
 	"github.com/spf13/cobra"
 )
 
+type updateClient interface {
+	Prepare() (updater.Plan, error)
+	Execute(context.Context, updater.Plan, io.Writer, io.Writer) error
+}
+
 func newUpdateCommand() *cobra.Command {
+	return newUpdateCommandWithClient(updater.New())
+}
+
+func newUpdateCommandWithClient(client updateClient) *cobra.Command {
 	return &cobra.Command{
 		Use:   "update",
 		Short: "Update sparks to the latest release",
-		Long: `Download and install the latest sparks release from GitHub.
+		Long: `Detect the active shell and run the official sparks installer.
 
-The update is installed only after its SHA-256 checksum matches the checksum
-published by GoReleaser. The executable directory must be writable.`,
+On macOS and Linux, sparks uses SPARKS_SHELL or SHELL and supports bash, zsh,
+fish and POSIX-compatible shells. On Windows, PowerShell waits for the running
+sparks process to exit before replacing it. The installer targets the directory
+of the active executable and verifies the GoReleaser SHA-256 checksum.`,
 		Example: `  sparks update`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			client := updater.New(version).OnProgress(func(stage updater.ProgressStage) {
-				messages := map[updater.ProgressStage]string{
-					updater.ProgressChecking:    "Checking for updates...",
-					updater.ProgressDownloading: "Downloading update...",
-					updater.ProgressVerifying:   "Verifying checksum...",
-					updater.ProgressInstalling:  "Installing update...",
-				}
-				output.Message(stdout(cmd), "%s", messages[stage])
-			})
-			result, err := client.Update(cmd.Context())
+			plan, err := client.Prepare()
 			if err != nil {
+				return fmt.Errorf("prepare sparks update: %w", err)
+			}
+			output.Message(stdout(cmd), "Detected %s", plan.Shell)
+			output.Message(stdout(cmd), "Running: %s", plan.Command)
+			if err := client.Execute(cmd.Context(), plan, stdout(cmd), cmd.ErrOrStderr()); err != nil {
 				return fmt.Errorf("update sparks: %w", err)
 			}
-			if !result.Updated {
-				output.Message(stdout(cmd), "sparks %s is already up to date", result.CurrentVersion)
+			if plan.Deferred {
+				output.Message(stdout(cmd), "Installer started. It will replace sparks after this process exits")
 				return nil
 			}
-			output.Message(stdout(cmd), "Updated sparks from %s to %s. Restart sparks to use the new version", result.CurrentVersion, result.LatestVersion)
+			output.Message(stdout(cmd), "Update finished. Restart sparks to use the installed version")
 			return nil
 		},
 	}

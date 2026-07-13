@@ -1,291 +1,225 @@
 package updater
 
 import (
-	"archive/tar"
-	"archive/zip"
 	"bytes"
-	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
-func TestUpdateDownloadsVerifiesAndAppliesRelease(t *testing.T) {
-	binary := []byte("new sparks binary")
-	archive := zipArchive(t, "sparks.exe", binary)
-	archiveName := "sparks_0.2.0_windows_amd64.zip"
-	digest := sha256.Sum256(archive)
+func TestPrepareDetectsUnixShells(t *testing.T) {
+	tests := []struct {
+		name     string
+		shell    string
+		want     string
+		wantPath string
+	}{
+		{name: "bash", shell: "/bin/bash", want: "bash", wantPath: "/bin/bash"},
+		{name: "zsh", shell: "/bin/zsh", want: "zsh", wantPath: "/bin/zsh"},
+		{name: "login zsh", shell: "-zsh", want: "zsh", wantPath: "zsh"},
+		{name: "fish", shell: "/usr/local/bin/fish", want: "fish", wantPath: "/usr/local/bin/fish"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			updater, target := testUpdater(t, "darwin")
+			updater.getenv = func(key string) string {
+				if key == "SHELL" {
+					return test.shell
+				}
+				return ""
+			}
+			updater.lookPath = func(file string) (string, error) { return file, nil }
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/latest":
-			_ = json.NewEncoder(w).Encode(release{
-				TagName: "v0.2.0",
-				Assets: []releaseAsset{
-					{Name: archiveName, URL: serverURL(r) + "/archive"},
-					{Name: "checksums.txt", URL: serverURL(r) + "/checksums"},
-				},
-			})
-		case "/archive":
-			_, _ = w.Write(archive)
-		case "/checksums":
-			_, _ = fmt.Fprintf(w, "%x  %s\n", digest, archiveName)
+			plan, err := updater.Prepare()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.Shell != test.want || plan.executable != test.wantPath || plan.Deferred {
+				t.Fatalf("unexpected plan: %#v", plan)
+			}
+			if !strings.Contains(plan.Command, "curl -fsSL") || !strings.Contains(plan.Command, filepath.Dir(target)) {
+				t.Fatalf("command does not describe installer and target: %q", plan.Command)
+			}
+			if got := environmentValue(plan.env, "SPARKS_INSTALL_DIR"); got != filepath.Dir(target) {
+				t.Fatalf("SPARKS_INSTALL_DIR = %q", got)
+			}
+			if got := environmentValue(plan.env, "SPARKS_SKIP_PATH_UPDATE"); got != "1" {
+				t.Fatalf("SPARKS_SKIP_PATH_UPDATE = %q", got)
+			}
+		})
+	}
+}
+
+func TestPrepareUsesShellOverrideAndPOSIXFallback(t *testing.T) {
+	updater, _ := testUpdater(t, "linux")
+	updater.getenv = func(key string) string {
+		switch key {
+		case "SPARKS_SHELL":
+			return "zsh"
+		case "SHELL":
+			return "/bin/bash"
 		default:
-			http.NotFound(w, r)
+			return ""
 		}
-	}))
-	defer server.Close()
-
-	target := filepath.Join(t.TempDir(), "sparks.exe")
-	if err := os.WriteFile(target, []byte("old"), 0o755); err != nil {
-		t.Fatal(err)
 	}
-	var applied []byte
-	updater := New("0.1.0")
-	updater.apiURL = server.URL + "/latest"
-	updater.client = server.Client()
-	updater.goos = "windows"
-	updater.goarch = "amd64"
-	updater.executablePath = target
-	var stages []ProgressStage
-	updater.OnProgress(func(stage ProgressStage) {
-		stages = append(stages, stage)
-	})
-	updater.apply = func(reader io.Reader, gotTarget string, _ os.FileMode) error {
-		if gotTarget != target {
-			t.Fatalf("target = %q, want %q", gotTarget, target)
+	updater.lookPath = func(file string) (string, error) {
+		if file == "zsh" {
+			return "", errors.New("missing")
 		}
-		var err error
-		applied, err = io.ReadAll(reader)
-		return err
+		return "/bin/sh", nil
 	}
 
-	result, err := updater.Update(context.Background())
+	plan, err := updater.Prepare()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Updated || result.CurrentVersion != "0.1.0" || result.LatestVersion != "0.2.0" {
-		t.Fatalf("unexpected result: %#v", result)
-	}
-	if !bytes.Equal(applied, binary) {
-		t.Fatalf("applied binary = %q, want %q", applied, binary)
-	}
-	wantStages := []ProgressStage{ProgressChecking, ProgressDownloading, ProgressVerifying, ProgressInstalling}
-	if fmt.Sprint(stages) != fmt.Sprint(wantStages) {
-		t.Fatalf("progress stages = %v, want %v", stages, wantStages)
+	if plan.Shell != "sh" || plan.executable != "/bin/sh" {
+		t.Fatalf("unexpected fallback plan: %#v", plan)
 	}
 }
 
-func TestDownloadRetriesBeforeUsingFallback(t *testing.T) {
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		attempts++
-		http.Error(w, "try again", http.StatusServiceUnavailable)
-	}))
-	defer server.Close()
-
-	updater := New("1.0.0")
-	updater.client = server.Client()
-	fallbackCalls := 0
-	updater.fallback = func(_ context.Context, url string, limit int64) ([]byte, error) {
-		fallbackCalls++
-		if url != server.URL || limit != 16 {
-			t.Fatalf("fallback called with url=%q limit=%d", url, limit)
+func TestPreparePrefersActiveParentShellOverLoginShell(t *testing.T) {
+	updater, _ := testUpdater(t, "darwin")
+	updater.parentShell = func() string { return "/bin/bash" }
+	updater.getenv = func(key string) string {
+		if key == "SHELL" {
+			return "/bin/zsh"
 		}
-		return []byte("fallback"), nil
+		return ""
 	}
+	updater.lookPath = func(file string) (string, error) { return file, nil }
 
-	data, err := updater.download(context.Background(), server.URL, 16)
+	plan, err := updater.Prepare()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "fallback" || attempts != maxDownloadTries || fallbackCalls != 1 {
-		t.Fatalf("data=%q attempts=%d fallbackCalls=%d", data, attempts, fallbackCalls)
+	if plan.Shell != "bash" || plan.executable != "/bin/bash" {
+		t.Fatalf("active parent shell was not selected: %#v", plan)
 	}
 }
 
-func TestDownloadDoesNotFallbackForPermanentHTTPError(t *testing.T) {
-	server := httptest.NewServer(http.NotFoundHandler())
-	defer server.Close()
-
-	updater := New("1.0.0")
-	updater.client = server.Client()
-	updater.fallback = func(context.Context, string, int64) ([]byte, error) {
-		t.Fatal("fallback should not be used for a permanent HTTP error")
-		return nil, nil
+func TestPrepareDefersWindowsInstallerUntilCurrentProcessExits(t *testing.T) {
+	updater, target := testUpdater(t, "windows")
+	updater.pid = 4242
+	updater.lookPath = func(file string) (string, error) {
+		if file == "pwsh" {
+			return "C:\\Program Files\\PowerShell\\7\\pwsh.exe", nil
+		}
+		return "", errors.New("not found")
 	}
 
-	_, err := updater.download(context.Background(), server.URL, 16)
-	if err == nil || !strings.Contains(err.Error(), "404 Not Found") {
-		t.Fatalf("unexpected error: %v", err)
+	plan, err := updater.Prepare()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Shell != "PowerShell 7" || !plan.Deferred {
+		t.Fatalf("unexpected plan: %#v", plan)
+	}
+	if !containsSequence(plan.args, "-Command") || !strings.Contains(strings.Join(plan.args, " "), "4242") {
+		t.Fatalf("PowerShell arguments do not wait for the parent: %v", plan.args)
+	}
+	if got := environmentValue(plan.env, "SPARKS_INSTALL_DIR"); got != filepath.Dir(target) {
+		t.Fatalf("SPARKS_INSTALL_DIR = %q", got)
+	}
+	if got := environmentValue(plan.env, "SPARKS_SKIP_PATH_UPDATE"); got != "1" {
+		t.Fatalf("SPARKS_SKIP_PATH_UPDATE = %q", got)
 	}
 }
 
-func TestUpdateSkipsCurrentOrNewerVersion(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(release{TagName: "v0.2.0"})
-	}))
-	defer server.Close()
-
-	updater := New("0.3.0")
-	updater.apiURL = server.URL
-	updater.client = server.Client()
-	updater.apply = func(io.Reader, string, os.FileMode) error {
-		t.Fatal("update should not be applied")
+func TestExecuteRunsUnixPlanSynchronously(t *testing.T) {
+	updater, _ := testUpdater(t, "linux")
+	plan := Plan{Shell: "bash", executable: "/bin/bash"}
+	called := false
+	updater.run = func(_ context.Context, got Plan, out, errOut io.Writer) error {
+		called = true
+		if !reflect.DeepEqual(got, plan) || out == nil || errOut == nil {
+			t.Fatal("run received unexpected arguments")
+		}
+		return nil
+	}
+	updater.start = func(Plan, io.Writer, io.Writer) error {
+		t.Fatal("deferred runner should not be called")
 		return nil
 	}
 
-	result, err := updater.Update(context.Background())
-	if err != nil {
+	if err := updater.Execute(context.Background(), plan, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	if result.Updated || result.LatestVersion != "0.2.0" {
-		t.Fatalf("unexpected result: %#v", result)
+	if !called {
+		t.Fatal("synchronous runner was not called")
 	}
 }
 
-func TestUpdateRejectsChecksumMismatch(t *testing.T) {
-	archiveName := "sparks_0.2.0_linux_amd64.tar.gz"
-	archive := tarGzipArchive(t, "sparks", []byte("binary"))
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/latest":
-			_ = json.NewEncoder(w).Encode(release{
-				TagName: "v0.2.0",
-				Assets: []releaseAsset{
-					{Name: archiveName, URL: serverURL(r) + "/archive"},
-					{Name: "checksums.txt", URL: serverURL(r) + "/checksums"},
-				},
-			})
-		case "/archive":
-			_, _ = w.Write(archive)
-		case "/checksums":
-			_, _ = fmt.Fprintf(w, "%064d  %s\n", 0, archiveName)
-		}
-	}))
-	defer server.Close()
+func TestExecuteStartsWindowsPlanAndHonorsCancellation(t *testing.T) {
+	updater, _ := testUpdater(t, "windows")
+	plan := Plan{Shell: "PowerShell", Deferred: true, executable: "powershell.exe"}
+	starts := 0
+	updater.start = func(Plan, io.Writer, io.Writer) error {
+		starts++
+		return nil
+	}
 
-	updater := New("0.1.0")
-	updater.apiURL = server.URL + "/latest"
-	updater.client = server.Client()
+	if err := updater.Execute(context.Background(), plan, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := updater.Execute(ctx, plan, &bytes.Buffer{}, &bytes.Buffer{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled update returned %v", err)
+	}
+	if starts != 1 {
+		t.Fatalf("installer starts = %d, want 1", starts)
+	}
+}
+
+func TestPrepareRejectsUnsupportedOSAndMissingExecutable(t *testing.T) {
+	updater, _ := testUpdater(t, "plan9")
+	if _, err := updater.Prepare(); err == nil || !strings.Contains(err.Error(), "plan9") {
+		t.Fatalf("unexpected unsupported OS error: %v", err)
+	}
 	updater.goos = "linux"
-	updater.goarch = "amd64"
-	updater.apply = func(io.Reader, string, os.FileMode) error {
-		t.Fatal("update should not be applied")
-		return nil
-	}
-
-	_, err := updater.Update(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
-		t.Fatalf("expected checksum mismatch, got %v", err)
+	updater.executablePath = filepath.Join(t.TempDir(), "missing")
+	if _, err := updater.Prepare(); err == nil || !strings.Contains(err.Error(), "inspect executable") {
+		t.Fatalf("unexpected missing executable error: %v", err)
 	}
 }
 
-func TestExtractBinaryFromTarGzip(t *testing.T) {
-	want := []byte("unix binary")
-	archive := tarGzipArchive(t, "folder/sparks", want)
-	got, err := extractBinary("sparks_0.2.0_linux_amd64.tar.gz", "sparks", archive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("binary = %q, want %q", got, want)
-	}
-}
-
-func TestAssetNamesRejectUnsupportedPlatform(t *testing.T) {
-	if _, _, err := assetNames("0.2.0", "windows", "arm64"); err == nil {
-		t.Fatal("expected windows/arm64 error")
-	}
-	if _, _, err := assetNames("0.2.0", "plan9", "amd64"); err == nil {
-		t.Fatal("expected unsupported OS error")
-	}
-}
-
-func TestVersionComparison(t *testing.T) {
-	stable, err := parseVersion("v1.2.3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	prerelease, err := parseVersion("1.2.3-next")
-	if err != nil {
-		t.Fatal(err)
-	}
-	older, err := parseVersion("1.2.2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if compareVersions(prerelease, stable) >= 0 || compareVersions(stable, older) <= 0 {
-		t.Fatal("unexpected semantic version ordering")
-	}
-	if _, err := parseVersion("development"); err == nil {
-		t.Fatal("expected invalid version error")
-	}
-}
-
-func TestDefaultApplyReplacesTarget(t *testing.T) {
-	target := filepath.Join(t.TempDir(), "sparks-test")
-	if err := os.WriteFile(target, []byte("old"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	updater := New("0.1.0")
-	if err := updater.apply(strings.NewReader("new"), target, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	contents, err := os.ReadFile(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(contents) != "new" {
-		t.Fatalf("target contains %q", contents)
-	}
-}
-
-func zipArchive(t *testing.T, name string, contents []byte) []byte {
+func testUpdater(t *testing.T, goos string) (*Updater, string) {
 	t.Helper()
-	var buffer bytes.Buffer
-	writer := zip.NewWriter(&buffer)
-	file, err := writer.Create(name)
-	if err != nil {
+	target := filepath.Join(t.TempDir(), "sparks")
+	if goos == "windows" {
+		target += ".exe"
+	}
+	if err := os.WriteFile(target, []byte("test"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := file.Write(contents); err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return buffer.Bytes()
+	updater := New()
+	updater.goos = goos
+	updater.executablePath = target
+	updater.parentShell = func() string { return "" }
+	return updater, target
 }
 
-func tarGzipArchive(t *testing.T, name string, contents []byte) []byte {
-	t.Helper()
-	var buffer bytes.Buffer
-	gzipWriter := gzip.NewWriter(&buffer)
-	tarWriter := tar.NewWriter(gzipWriter)
-	if err := tarWriter.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(contents))}); err != nil {
-		t.Fatal(err)
+func environmentValue(environment []string, key string) string {
+	prefix := key + "="
+	for _, entry := range environment {
+		if strings.HasPrefix(entry, prefix) {
+			return strings.TrimPrefix(entry, prefix)
+		}
 	}
-	if _, err := tarWriter.Write(contents); err != nil {
-		t.Fatal(err)
-	}
-	if err := tarWriter.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := gzipWriter.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return buffer.Bytes()
+	return ""
 }
 
-func serverURL(r *http.Request) string {
-	return "http://" + r.Host
+func containsSequence(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

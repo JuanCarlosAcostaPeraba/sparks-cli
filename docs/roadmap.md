@@ -1,5 +1,12 @@
 # Roadmap
 
+## v1.2.0 — shell-aware updates
+
+- Shell-aware delegation to the official installers
+- Active executable targeting on every supported platform
+- Deferred PowerShell replacement on Windows
+- SHA-256 verification in both installation scripts
+
 ## v1.1.1 — updater reliability
 
 - Visible update progress and actionable errors

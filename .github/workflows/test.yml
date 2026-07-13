@@ -24,6 +24,24 @@ jobs:
           cache: true
       - name: Download dependencies
         run: go mod download
+      - name: Validate POSIX installer
+        if: runner.os != 'Windows'
+        run: sh -n scripts/install.sh
+      - name: Validate PowerShell installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/install.ps1),
+            [ref]$tokens,
+            [ref]$parseErrors
+          )
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | Format-List
+            exit 1
+          }
       - name: Test
         run: go test ./...
       - name: Vet
