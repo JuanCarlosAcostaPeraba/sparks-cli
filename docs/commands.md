@@ -5,8 +5,8 @@
 ```bash
 sparks
 sparks list
-sparks list --all
-sparks list --json
+sparks list -a
+sparks list -j
 ```
 
 ## Add
@@ -14,6 +14,7 @@ sparks list --json
 ```bash
 sparks add "Create GoReleaser config"
 sparks + "Create Homebrew tap"
+sparks add -p 1 "Create child spark"
 ```
 
 ## Complete
@@ -42,22 +43,25 @@ sparks - 3
 
 ```bash
 sparks clear
-sparks clear --all --yes
+sparks clear -a -y
 ```
 
 ## Tree
 
 ```bash
 sparks tree
-sparks tree --json
+sparks tree -j
 ```
 
 ## Search
 
 ```bash
 sparks search "codex"
-sparks search "codex" --json
+sparks search "codex" -j
 ```
+
+The long forms remain available. Short aliases are `-a` for `--all`, `-j` for
+`--json`, `-p` for `--parent`, `-y` for `--yes`, and `-d` for `--db`.
 
 ## Version
 

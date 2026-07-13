@@ -30,8 +30,8 @@ sparks, or --json when another tool needs structured output.`,
 			return runListWithOptions(cmd, opts)
 		},
 	}
-	cmd.Flags().BoolVar(&opts.all, "all", false, "include completed sparks")
-	cmd.Flags().BoolVar(&opts.json, "json", false, "write JSON output")
+	cmd.Flags().BoolVarP(&opts.all, "all", "a", false, "include completed sparks")
+	cmd.Flags().BoolVarP(&opts.json, "json", "j", false, "write JSON output")
 	return cmd
 }
 

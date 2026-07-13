@@ -39,7 +39,7 @@ intentionally want to clear every spark in the current database.`,
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&opts.all, "all", false, "clear all sparks")
-	cmd.Flags().BoolVar(&opts.yes, "yes", false, "confirm clearing all sparks")
+	cmd.Flags().BoolVarP(&opts.all, "all", "a", false, "clear all sparks")
+	cmd.Flags().BoolVarP(&opts.yes, "yes", "y", false, "confirm clearing all sparks")
 	return cmd
 }

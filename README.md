@@ -47,6 +47,7 @@ Homebrew, Scoop, and winget packages are planned after the MVP.
 ```bash
 sparks
 sparks list
+sparks list -a
 sparks add "Prepare Codex prompt"
 sparks + "Create Homebrew tap"
 sparks add --parent 1 "Add release notes"
@@ -58,7 +59,7 @@ sparks remove 3
 sparks rm 3
 sparks - 3
 sparks clear
-sparks clear --all --yes
+sparks clear -a -y
 sparks tree
 sparks search "codex"
 sparks version
@@ -73,7 +74,8 @@ STATUS  ID  TITLE
 ☑       3   Initial README
 ```
 
-Most list-style commands support `--json`.
+Flags have short aliases: `-a` for `--all`, `-j` for `--json`, `-p` for
+`--parent`, `-y` for `--yes`, and `-d` for `--db`.
 
 ## Data Location
 

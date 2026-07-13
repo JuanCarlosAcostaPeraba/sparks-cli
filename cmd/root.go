@@ -49,7 +49,7 @@ shown by list or JSON output.`,
 	}
 	root.SetOut(out)
 	root.SetErr(errOut)
-	root.PersistentFlags().StringVar(&opts.dbPath, "db", "", "use a specific SQLite database path")
+	root.PersistentFlags().StringVarP(&opts.dbPath, "db", "d", "", "use a specific SQLite database path")
 	root.SetContext(withRootOptions(context.Background(), opts))
 
 	root.AddCommand(newListCommand())

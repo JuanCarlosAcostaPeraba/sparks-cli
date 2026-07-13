@@ -38,6 +38,6 @@ JSON output. Child sparks appear nested under their parent in tree output.`,
 			})
 		},
 	}
-	cmd.Flags().StringVar(&opts.parent, "parent", "", "add as a child of the given spark ID")
+	cmd.Flags().StringVarP(&opts.parent, "parent", "p", "", "add as a child of the given spark ID")
 	return cmd
 }
