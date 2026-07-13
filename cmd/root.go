@@ -60,6 +60,7 @@ shown by list or JSON output.`,
 	root.AddCommand(newClearCommand())
 	root.AddCommand(newTreeCommand())
 	root.AddCommand(newSearchCommand())
+	root.AddCommand(newUpdateCommand())
 	root.AddCommand(newVersionCommand())
 	return root
 }

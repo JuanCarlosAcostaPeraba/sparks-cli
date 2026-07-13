@@ -64,6 +64,7 @@ sparks clear
 sparks clear -a -y
 sparks tree
 sparks search "codex"
+sparks update
 sparks version
 ```
 
@@ -107,6 +108,10 @@ go run . list
 ```
 
 ## Releases
+
+Installed release binaries can update themselves with `sparks update`. The
+command verifies the GoReleaser SHA-256 checksum before replacing the current
+executable.
 
 Releases are handled by GoReleaser. Tag-based GitHub Actions builds publish archives and checksums.
 

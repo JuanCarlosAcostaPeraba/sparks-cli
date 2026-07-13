@@ -91,3 +91,12 @@ The long forms remain available. Short aliases are `-a` for `--all`, `-j` for
 ```bash
 sparks version
 ```
+
+## Update
+
+```bash
+sparks update
+```
+
+The command downloads the latest platform archive from GitHub Releases,
+verifies it against `checksums.txt`, and replaces the current executable.
