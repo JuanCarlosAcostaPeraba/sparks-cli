@@ -1,179 +1,196 @@
-# sparks-cli
+<div align="center">
 
-A tiny, fast CLI to capture ideas, tasks and nested thoughts without leaving your terminal.
+# ✨ sparks
 
-`sparks` is a native Go command-line tool for quickly recording ideas and tasks. It stores data in a local SQLite database under the operating system's application data directory, not beside the executable.
+**Catch the thought before it disappears.**
 
-## Installation
+A tiny, fast, local-first CLI for ideas, tasks, and nested thoughts.
+
+[![CI](https://github.com/JuanCarlosAcostaPeraba/sparks-cli/actions/workflows/test.yml/badge.svg)](https://github.com/JuanCarlosAcostaPeraba/sparks-cli/actions/workflows/test.yml)
+[![Latest release](https://img.shields.io/github/v/release/JuanCarlosAcostaPeraba/sparks-cli?display_name=tag&sort=semver)](https://github.com/JuanCarlosAcostaPeraba/sparks-cli/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/JuanCarlosAcostaPeraba/sparks-cli)](https://go.dev/)
+[![License](https://img.shields.io/github/license/JuanCarlosAcostaPeraba/sparks-cli)](LICENSE)
+
+[Website](https://sparks-web-nu.vercel.app/) · [Install](#install) · [Quick start](#quick-start) · [Command reference](docs/commands.md) · [Roadmap](docs/roadmap.md)
+
+</div>
+
+`sparks` is built for the moment when opening a full task manager would take longer than capturing the thought. It starts instantly, works without an account, and keeps everything in a local SQLite database.
+
+```text
+$ sparks + "Ship the launch page"
+Added spark 1
+$ sparks + --parent 1 "Polish the copy"
+Added spark 2
+$ sparks important 1
+Marked spark 1 as important
+$ sparks tree
+└─ [!] 1) Ship the launch page
+   └─ [ ] 1.1) Polish the copy
+```
+
+## Why sparks?
+
+| | |
+|---|---|
+| ⚡ **Instant capture** | Add a thought from any terminal in a single command. |
+| 🧭 **Keyboard-first TUI** | Browse, search, edit, prioritize, complete, and delete without leaving the interactive view. |
+| 🌳 **Nested thoughts** | Turn an idea into a lightweight tree of tasks and sub-ideas. |
+| 🔒 **Local by default** | Your data stays in a SQLite file on your machine. No account or cloud service required. |
+| 🎨 **Useful visual feedback** | Consistent states and colors make active, important, completed, and selected sparks easy to spot. |
+| 🤖 **Script friendly** | JSON output, redirected input, stable status markers, and shell completions fit naturally into terminal workflows. |
+| 📦 **Native and cross-platform** | One small Go binary for macOS, Linux, and Windows, with verified self-updates. |
+
+## Install
 
 ### macOS and Linux
-
-Install the latest release with one command:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
 ```
 
-The installer downloads the matching release archive and places `sparks` in
-`~/.local/bin`.
+The installer selects the correct release for your OS and architecture, verifies its SHA-256 checksum, and installs `sparks` in `~/.local/bin` by default.
 
 ### Windows
 
-Install the latest release from PowerShell with one command:
+Run in PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
 ```
 
-The installer downloads the matching release archive, installs `sparks.exe` under
-`%LOCALAPPDATA%\Programs\sparks`, and adds that directory to your user `PATH`.
+The installer downloads and verifies `sparks.exe`, installs it under `%LOCALAPPDATA%\Programs\sparks`, and adds that directory to your user `PATH`.
 
-### Options
+Need a specific version or install directory? See the [installation guide](docs/installation.md). Homebrew, Scoop, and winget packages are planned but are not available yet.
 
-```bash
-SPARKS_VERSION=1.2.0 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
-SPARKS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
-```
-
-```powershell
-$env:SPARKS_VERSION = "1.2.0"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
-$env:SPARKS_INSTALL_DIR = "$HOME\bin"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
-```
-
-Homebrew, Scoop, and winget packages are planned after the MVP.
-
-## Usage
+## Quick start
 
 ```bash
-sparks
-sparks list
-sparks list -a
-sparks add Prepare Codex prompt
-sparks + Create Homebrew tap
-sparks add --parent 1 "Add release notes"
-sparks edit 1 "Prepare release notes"
-sparks e 1 "Prepare release notes"
-sparks done 3
-sparks ok 3
-sparks important 3
-sparks ! 3
-sparks remove 3
-sparks rm 3
-sparks - 3
-sparks clear
-sparks clear -a -y
+# Capture a thought
+sparks add "Prepare release notes"
+
+# The + alias is even faster
+sparks + "Publish the release"
+
+# Create a child spark
+sparks + --parent 1 "Add installation notes"
+
+# Prioritize and complete sparks
+sparks important 1
+sparks done 2
+
+# See the hierarchy
 sparks tree
-sparks search "codex"
-sparks update
-sparks version
 ```
 
-The default command opens a full-screen interactive table when the terminal is
-interactive. Navigate with the arrow keys or `j`/`k`; use `a` to add, `e` to
-edit, `i` to toggle importance, `c` to add a child to the selected spark, `d`
-to complete, and `x` to remove. Use `s` or `/` to search, `v` to switch
-between active-only and all sparks, and `C` to clear completed sparks after a
-confirmation. Press `?` for help or `q` to quit.
+Run `sparks` with no arguments to open the full-screen interactive experience.
 
-```txt
-  SEL  ID     STATE       TITLE
-   >   #1     active      Prepare release notes
-       #2     important   Publish Homebrew tap
+## The interactive TUI
+
+The TUI keeps the whole workflow under your fingertips. It starts with active sparks only, and lets you search, include completed items, or clear completed items without returning to the shell.
+
+```text
+  ███████╗██████╗  █████╗ ██████╗ ██╗  ██╗███████╗
+  ██╔════╝██╔══██╗██╔══██╗██╔══██╗██║ ██╔╝██╔════╝
+  ███████╗██████╔╝███████║██████╔╝█████╔╝ ███████╗
+  ╚════██║██╔═══╝ ██╔══██║██╔══██╗██╔═██╗ ╚════██║
+  ███████║██║     ██║  ██║██║  ██║██║  ██╗███████║
+  ╚══════╝╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+
+  View: active only
+
+  SEL  ID     STATE          TITLE
+   >   #1     important      Ship the launch page
+       #2     active         Polish the copy
+
+  a add · e edit · i important · c child · d done · x remove
+  s search · v active/all · C clear completed · ? help · q quit
 ```
 
-When input or output is redirected, `sparks` keeps the line-based interactive
-fallback so scripts can send regular commands followed by `exit` or `quit`.
+| Key | Action |
+|---|---|
+| `↑` / `↓` or `j` / `k` | Move through sparks |
+| `a` | Add a spark |
+| `s` or `/` | Search by title |
+| `v` | Switch between active sparks and the complete list |
+| `e` | Edit the selected spark |
+| `i` | Toggle important status |
+| `c` | Add a child to the selected spark |
+| `d` | Mark the selected spark as completed |
+| `x` | Remove the selected spark |
+| `C` | Clear completed sparks after confirmation |
+| `?` | Show keyboard help |
+| `q` | Quit |
 
-```txt
-STATUS  ID  TITLE
-[ ]     1   Prepare Codex prompt
-[!]     2   Publish Homebrew tap
-[x]     3   Initial README
-```
+Status is always represented consistently: `[ ]` active, `[!]` important, and `[x]` completed. Colors add feedback in a terminal but are automatically omitted from JSON and redirected output. Set [`NO_COLOR`](https://no-color.org/) to disable them everywhere.
 
-Flags have short aliases: `-a` for `--all`, `-j` for `--json`, `-p` for
-`--parent`, `-y` for `--yes`, and `-d` for `--db`.
+## Commands at a glance
 
-Interactive terminal output uses color to distinguish IDs, important and
-completed sparks, selections, shortcuts, and action feedback. Color is omitted
-from JSON and redirected output; set the standard `NO_COLOR` environment
-variable to disable it in a terminal as well.
+| Command | What it does | Shortcut |
+|---|---|---|
+| `sparks add <text>` | Capture a new spark | `sparks +` |
+| `sparks list` | List active sparks (`-a` includes completed) | `sparks ls` |
+| `sparks edit <id> <text>` | Change a title | `sparks e` |
+| `sparks done <id>` | Mark a spark as completed | `sparks ok` |
+| `sparks important <id>` | Toggle important status | `sparks !` |
+| `sparks remove <id>` | Remove a spark | `sparks rm`, `sparks -` |
+| `sparks clear` | Delete completed sparks | — |
+| `sparks tree` | Display nested sparks | — |
+| `sparks search <query>` | Search titles | — |
+| `sparks update` | Install the latest release | — |
+| `sparks version` | Print the installed version | — |
 
-## Data Location
+Use `sparks <command> --help` for examples and every available flag, or read the full [command reference](docs/commands.md).
 
-- macOS: `~/Library/Application Support/sparks/sparks.db`
-- Linux: `$XDG_DATA_HOME/sparks/sparks.db`, or `~/.local/share/sparks/sparks.db`
-- Windows: `%APPDATA%\sparks\sparks.db`
+## Automation and piping
 
-For tests or isolated runs, pass `--db /path/to/sparks.db`.
-
-## Development
+Use `--json` when another tool needs structured data:
 
 ```bash
-go mod tidy
+sparks list --all --json
+sparks search "release" --json
+```
+
+When input or output is redirected, `sparks` uses its line-based interactive fallback, so scripts can send regular commands followed by `exit` or `quit`.
+
+## Your data stays yours
+
+Sparks are stored in the operating system's application data directory, never beside the executable:
+
+| Platform | Database location |
+|---|---|
+| macOS | `~/Library/Application Support/sparks/sparks.db` |
+| Linux | `$XDG_DATA_HOME/sparks/sparks.db` or `~/.local/share/sparks/sparks.db` |
+| Windows | `%APPDATA%\sparks\sparks.db` |
+
+For an isolated workspace or test run, pass `--db /path/to/sparks.db`.
+
+## Stay current
+
+```bash
+sparks update
+```
+
+The updater shows what it is doing, detects `bash`, `zsh`, `fish`, or another POSIX-compatible shell on macOS and Linux, and uses the official installer. On Windows it safely replaces the executable through PowerShell after the running process exits. Downloads are verified against the checksums published with each GitHub release.
+
+Set `SPARKS_SHELL` if you need to override shell detection on Unix-like systems.
+
+## Build and contribute
+
+You need a current Go toolchain. Then:
+
+```bash
+git clone https://github.com/JuanCarlosAcostaPeraba/sparks-cli.git
+cd sparks-cli
 go test ./...
 go vet ./...
-go run . add "Try sparks"
-go run . list
+go run . --db ./sparks-dev.db
 ```
 
-## Releases
+Bug reports and focused pull requests are welcome. Browse the [open issues](https://github.com/JuanCarlosAcostaPeraba/sparks-cli/issues) or read the [roadmap](docs/roadmap.md) to see what is next.
 
-Installed release binaries can update themselves with `sparks update`. The
-command detects `bash`, `zsh`, `fish`, or another POSIX shell on macOS and
-Linux, then runs the official `curl` installer. On Windows it launches the
-PowerShell installer after the current process exits, avoiding executable file
-locks. Both installers target the active executable directory and verify the
-GoReleaser SHA-256 checksum. Set `SPARKS_SHELL` to override Unix shell
-detection.
-
-Releases are handled by GoReleaser. Tag-based GitHub Actions builds publish archives and checksums.
-
-```bash
-git tag v1.2.0
-git push origin v1.2.0
-```
-
-## Roadmap
-
-### v1.2.0 — shell-aware updates
-
-- Shell detection for bash, zsh, fish, and POSIX-compatible shells
-- Official installer delegation with active executable targeting
-- Deferred PowerShell replacement on Windows to avoid file locks
-- SHA-256 verification in both installation scripts
-
-### v1.1.1 — updater reliability
-
-- Visible update progress and actionable errors
-- Windows release-download retries with a native `curl.exe` fallback
-
-### v1.1.0 — TUI workflow
-
-- Consistent fixed-width `[ ]`, `[!]`, and `[x]` status indicators
-- Search inside the TUI with `s` or `/`
-- Switch between active-only and complete listings with `v`
-- Clear completed sparks from the TUI with `C` and confirmation
-
-### v1.0.0 — stable
-
-- Native Go CLI with local SQLite storage
-- Add, list, edit, complete, prioritize, remove, search, clear, and tree commands
-- Nested thoughts with parent-child relationships
-- Full-screen navigable TUI with inline actions and keyboard help
-- Color-coded IDs, states, selections, and action feedback with `NO_COLOR` support
-- JSON and redirected output suitable for scripts
-- Verified self-update command and cross-platform installers
-- GoReleaser archives and checksums for Windows, macOS, and Linux
-
-### Next
-
-- Homebrew distribution
-- Optional encrypted sync
-- Raycast/Alfred integration ideas
-- More package managers: Scoop, winget, AUR, and Nix
-- Long-term Rust implementation while retaining the Go branch
+Releases are built by GoReleaser from tag-triggered GitHub Actions workflows. Release archives and checksums are available on the [releases page](https://github.com/JuanCarlosAcostaPeraba/sparks-cli/releases).
 
 ## License
 
-MIT
+`sparks` is available under the [MIT License](LICENSE).
