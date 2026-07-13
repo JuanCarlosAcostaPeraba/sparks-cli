@@ -1,496 +1,255 @@
 package updater
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"bytes"
-	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"crypto/tls"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
-
-	selfupdate "github.com/minio/selfupdate"
 )
 
 const (
-	defaultAPIURL    = "https://api.github.com/repos/JuanCarlosAcostaPeraba/sparks-cli/releases/latest"
-	maxMetadataBytes = 5 << 20
-	maxArchiveBytes  = 200 << 20
-	maxBinaryBytes   = 100 << 20
-	maxDownloadTries = 3
+	installScriptURL           = "https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh"
+	installPowerShellScriptURL = "https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1"
 )
 
-type ProgressStage string
+type Plan struct {
+	Shell    string
+	Command  string
+	Deferred bool
 
-const (
-	ProgressChecking    ProgressStage = "checking"
-	ProgressDownloading ProgressStage = "downloading"
-	ProgressVerifying   ProgressStage = "verifying"
-	ProgressInstalling  ProgressStage = "installing"
-)
-
-type Result struct {
-	CurrentVersion string
-	LatestVersion  string
-	Updated        bool
+	executable string
+	args       []string
+	env        []string
 }
 
-type applyFunc func(io.Reader, string, os.FileMode) error
-type downloadFunc func(context.Context, string, int64) ([]byte, error)
-
-type windowsReleaseTransport struct {
-	standard http.RoundTripper
-	assets   http.RoundTripper
-}
-
-func (t windowsReleaseTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if strings.EqualFold(req.URL.Hostname(), "release-assets.githubusercontent.com") {
-		return t.assets.RoundTrip(req)
-	}
-	return t.standard.RoundTrip(req)
-}
+type runFunc func(context.Context, Plan, io.Writer, io.Writer) error
+type startFunc func(Plan, io.Writer, io.Writer) error
 
 type Updater struct {
-	currentVersion string
-	apiURL         string
 	goos           string
-	goarch         string
 	executablePath string
-	client         *http.Client
-	apply          applyFunc
-	progress       func(ProgressStage)
-	fallback       downloadFunc
+	pid            int
+	getenv         func(string) string
+	parentShell    func() string
+	lookPath       func(string) (string, error)
+	run            runFunc
+	start          startFunc
 }
 
-type release struct {
-	TagName string         `json:"tag_name"`
-	Assets  []releaseAsset `json:"assets"`
-}
-
-type releaseAsset struct {
-	Name string `json:"name"`
-	URL  string `json:"browser_download_url"`
-}
-
-func New(currentVersion string) *Updater {
-	var transport http.RoundTripper = http.DefaultTransport
-	if runtime.GOOS == "windows" {
-		assets := http.DefaultTransport.(*http.Transport).Clone()
-		assets.ForceAttemptHTTP2 = false
-		assets.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12}
-		assets.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
-		transport = windowsReleaseTransport{standard: http.DefaultTransport, assets: assets}
-	}
-	updater := &Updater{
-		currentVersion: currentVersion,
-		apiURL:         defaultAPIURL,
-		goos:           runtime.GOOS,
-		goarch:         runtime.GOARCH,
-		client:         &http.Client{Timeout: 2 * time.Minute, Transport: transport},
-		apply: func(binary io.Reader, target string, mode os.FileMode) error {
-			return selfupdate.Apply(binary, selfupdate.Options{TargetPath: target, TargetMode: mode})
-		},
-	}
-	if runtime.GOOS == "windows" {
-		updater.fallback = curlDownload
-	}
-	return updater
-}
-
-func (u *Updater) OnProgress(progress func(ProgressStage)) *Updater {
-	u.progress = progress
-	return u
-}
-
-func (u *Updater) report(stage ProgressStage) {
-	if u.progress != nil {
-		u.progress(stage)
+func New() *Updater {
+	return &Updater{
+		goos:        runtime.GOOS,
+		pid:         os.Getpid(),
+		getenv:      os.Getenv,
+		parentShell: detectParentShell,
+		lookPath:    exec.LookPath,
+		run:         runPlan,
+		start:       startPlan,
 	}
 }
 
-func (u *Updater) Update(ctx context.Context) (Result, error) {
-	current, err := parseVersion(u.currentVersion)
-	if err != nil {
-		return Result{}, fmt.Errorf("read current version: %w", err)
-	}
-
-	u.report(ProgressChecking)
-	release, err := u.latestRelease(ctx)
-	if err != nil {
-		return Result{}, err
-	}
-	latest, err := parseVersion(release.TagName)
-	if err != nil {
-		return Result{}, fmt.Errorf("read latest release version: %w", err)
-	}
-
-	result := Result{CurrentVersion: current.String(), LatestVersion: latest.String()}
-	if compareVersions(current, latest) >= 0 {
-		return result, nil
-	}
-
-	archiveName, binaryName, err := assetNames(latest.String(), u.goos, u.goarch)
-	if err != nil {
-		return Result{}, err
-	}
-	archiveURL, ok := findAsset(release.Assets, archiveName)
-	if !ok {
-		return Result{}, fmt.Errorf("release asset %q not found", archiveName)
-	}
-	checksumsURL, ok := findAsset(release.Assets, "checksums.txt")
-	if !ok {
-		return Result{}, errors.New("release asset \"checksums.txt\" not found")
-	}
-
-	u.report(ProgressDownloading)
-	archive, err := u.download(ctx, archiveURL, maxArchiveBytes)
-	if err != nil {
-		return Result{}, fmt.Errorf("download %s: %w", archiveName, err)
-	}
-	checksums, err := u.download(ctx, checksumsURL, maxMetadataBytes)
-	if err != nil {
-		return Result{}, fmt.Errorf("download checksums: %w", err)
-	}
-	u.report(ProgressVerifying)
-	if err := verifyChecksum(archiveName, archive, checksums); err != nil {
-		return Result{}, err
-	}
-
-	binary, err := extractBinary(archiveName, binaryName, archive)
-	if err != nil {
-		return Result{}, err
-	}
-	target, mode, err := u.target()
-	if err != nil {
-		return Result{}, err
-	}
-	u.report(ProgressInstalling)
-	if err := u.apply(bytes.NewReader(binary), target, mode); err != nil {
-		return Result{}, fmt.Errorf("replace executable: %w", err)
-	}
-
-	result.Updated = true
-	return result, nil
-}
-
-func (u *Updater) latestRelease(ctx context.Context) (release, error) {
-	data, err := u.download(ctx, u.apiURL, maxMetadataBytes)
-	if err != nil {
-		return release{}, fmt.Errorf("check latest release: %w", err)
-	}
-	var latest release
-	if err := json.Unmarshal(data, &latest); err != nil {
-		return release{}, fmt.Errorf("decode latest release: %w", err)
-	}
-	if strings.TrimSpace(latest.TagName) == "" {
-		return release{}, errors.New("latest release has no tag")
-	}
-	return latest, nil
-}
-
-func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte, error) {
-	var lastErr error
-	fallbackAllowed := false
-	for attempt := 1; attempt <= maxDownloadTries; attempt++ {
-		data, retry, err := u.downloadOnce(ctx, url, limit)
-		if err == nil {
-			return data, nil
-		}
-		lastErr = err
-		fallbackAllowed = retry
-		if !retry || attempt == maxDownloadTries {
-			break
-		}
-		timer := time.NewTimer(time.Duration(attempt) * 250 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, ctx.Err()
-		case <-timer.C:
-		}
-	}
-	if u.fallback != nil && fallbackAllowed {
-		data, err := u.fallback(ctx, url, limit)
-		if err == nil {
-			return data, nil
-		}
-		return nil, fmt.Errorf("%v; Windows download fallback: %w", lastErr, err)
-	}
-	return nil, lastErr
-}
-
-func curlDownload(ctx context.Context, url string, limit int64) ([]byte, error) {
-	temporary, err := os.CreateTemp("", "sparks-update-*")
-	if err != nil {
-		return nil, fmt.Errorf("create temporary download: %w", err)
-	}
-	path := temporary.Name()
-	if err := temporary.Close(); err != nil {
-		_ = os.Remove(path)
-		return nil, fmt.Errorf("close temporary download: %w", err)
-	}
-	defer os.Remove(path)
-
-	args := []string{
-		"-fsSL",
-		"-4",
-		"--retry", "3",
-		"--connect-timeout", "20",
-		"--max-time", "120",
-		"--http1.1",
-		"--tlsv1.2",
-		"--ssl-no-revoke",
-		"--max-filesize", strconv.FormatInt(limit, 10),
-		"-o", path,
-		url,
-	}
-	command := exec.CommandContext(ctx, "curl.exe", args...)
-	var stderr bytes.Buffer
-	command.Stderr = &stderr
-	if err := command.Run(); err != nil {
-		detail := strings.TrimSpace(stderr.String())
-		if detail == "" {
-			detail = err.Error()
-		}
-		return nil, errors.New(detail)
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, fmt.Errorf("inspect temporary download: %w", err)
-	}
-	if info.Size() > limit {
-		return nil, fmt.Errorf("response exceeds %d bytes", limit)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read temporary download: %w", err)
-	}
-	return data, nil
-}
-
-func (u *Updater) downloadOnce(ctx context.Context, url string, limit int64) ([]byte, bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, false, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("User-Agent", "sparks-updater/"+u.currentVersion)
-
-	resp, err := u.client.Do(req)
-	if err != nil {
-		return nil, ctx.Err() == nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError
-		return nil, retry, fmt.Errorf("server returned %s", resp.Status)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil {
-		return nil, ctx.Err() == nil, err
-	}
-	if int64(len(data)) > limit {
-		return nil, false, fmt.Errorf("response exceeds %d bytes", limit)
-	}
-	return data, false, nil
-}
-
-func (u *Updater) target() (string, os.FileMode, error) {
+func (u *Updater) Prepare() (Plan, error) {
 	target := u.executablePath
 	if target == "" {
 		var err error
 		target, err = os.Executable()
 		if err != nil {
-			return "", 0, fmt.Errorf("locate executable: %w", err)
+			return Plan{}, fmt.Errorf("locate executable: %w", err)
 		}
 		if resolved, resolveErr := filepath.EvalSymlinks(target); resolveErr == nil {
 			target = resolved
 		}
 	}
-	info, err := os.Stat(target)
-	if err != nil {
-		return "", 0, fmt.Errorf("inspect executable: %w", err)
+	if _, err := os.Stat(target); err != nil {
+		return Plan{}, fmt.Errorf("inspect executable: %w", err)
 	}
-	return target, info.Mode(), nil
+	installDir := filepath.Dir(target)
+
+	switch u.goos {
+	case "darwin", "linux":
+		return u.prepareUnix(installDir)
+	case "windows":
+		return u.prepareWindows(installDir)
+	default:
+		return Plan{}, fmt.Errorf("updates are not available for %s", u.goos)
+	}
 }
 
-func findAsset(assets []releaseAsset, name string) (string, bool) {
-	for _, asset := range assets {
-		if asset.Name == name && asset.URL != "" {
-			return asset.URL, true
+func (u *Updater) Execute(ctx context.Context, plan Plan, out, errOut io.Writer) error {
+	if strings.TrimSpace(plan.executable) == "" {
+		return errors.New("update plan has no shell executable")
+	}
+	if plan.Deferred {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 		}
-	}
-	return "", false
-}
-
-func assetNames(version, goos, goarch string) (string, string, error) {
-	if goarch != "amd64" && goarch != "arm64" {
-		return "", "", fmt.Errorf("updates are not available for architecture %s", goarch)
-	}
-	if goos == "windows" {
-		if goarch == "arm64" {
-			return "", "", errors.New("updates are not available for windows/arm64")
+		if err := u.start(plan, out, errOut); err != nil {
+			return fmt.Errorf("start %s installer: %w", plan.Shell, err)
 		}
-		return fmt.Sprintf("sparks_%s_windows_%s.zip", version, goarch), "sparks.exe", nil
+		return nil
 	}
-	if goos != "darwin" && goos != "linux" {
-		return "", "", fmt.Errorf("updates are not available for %s/%s", goos, goarch)
-	}
-	return fmt.Sprintf("sparks_%s_%s_%s.tar.gz", version, goos, goarch), "sparks", nil
-}
-
-func verifyChecksum(name string, archive, checksums []byte) error {
-	want := ""
-	for _, line := range strings.Split(string(checksums), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		filename := strings.TrimPrefix(fields[len(fields)-1], "*")
-		if filename == name {
-			want = fields[0]
-			break
-		}
-	}
-	if want == "" {
-		return fmt.Errorf("checksum for %q not found", name)
-	}
-	expected, err := hex.DecodeString(want)
-	if err != nil {
-		return fmt.Errorf("decode checksum for %q: %w", name, err)
-	}
-	actual := sha256.Sum256(archive)
-	if !bytes.Equal(expected, actual[:]) {
-		return fmt.Errorf("checksum mismatch for %q", name)
+	if err := u.run(ctx, plan, out, errOut); err != nil {
+		return fmt.Errorf("run %s installer: %w", plan.Shell, err)
 	}
 	return nil
 }
 
-func extractBinary(archiveName, binaryName string, archive []byte) ([]byte, error) {
-	if strings.HasSuffix(archiveName, ".zip") {
-		reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
-		if err != nil {
-			return nil, fmt.Errorf("open update archive: %w", err)
-		}
-		for _, file := range reader.File {
-			if !file.FileInfo().IsDir() && filepath.Base(file.Name) == binaryName {
-				opened, err := file.Open()
-				if err != nil {
-					return nil, fmt.Errorf("open updated binary: %w", err)
-				}
-				defer opened.Close()
-				return readBinary(opened)
-			}
-		}
-		return nil, fmt.Errorf("binary %q not found in update archive", binaryName)
+func (u *Updater) prepareUnix(installDir string) (Plan, error) {
+	shellName, shellPath := normalizeShell(u.getenv("SPARKS_SHELL"))
+	if shellName == "" {
+		shellName, shellPath = normalizeShell(u.parentShell())
 	}
-
-	gz, err := gzip.NewReader(bytes.NewReader(archive))
+	if shellName == "" || !isSupportedUnixShell(shellName) {
+		shellName, shellPath = normalizeShell(u.getenv("SHELL"))
+	}
+	if !isSupportedUnixShell(shellName) {
+		shellName = "sh"
+		shellPath = "sh"
+	}
+	resolved, err := u.lookPath(shellPath)
+	if err != nil && shellName != "sh" {
+		shellName = "sh"
+		resolved, err = u.lookPath("sh")
+	}
 	if err != nil {
-		return nil, fmt.Errorf("open update archive: %w", err)
+		return Plan{}, fmt.Errorf("locate shell: %w", err)
 	}
-	defer gz.Close()
-	tarReader := tar.NewReader(gz)
-	for {
-		header, err := tarReader.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
+
+	command := "curl -fsSL " + installScriptURL + " | sh"
+	environment := withEnvironment(os.Environ(), "SPARKS_INSTALL_DIR", installDir, false)
+	environment = withEnvironment(environment, "SPARKS_SKIP_PATH_UPDATE", "1", false)
+	return Plan{
+		Shell:      shellName,
+		Command:    "SPARKS_INSTALL_DIR=" + quotePOSIX(installDir) + " " + command,
+		executable: resolved,
+		args:       []string{"-c", command},
+		env:        environment,
+	}, nil
+}
+
+func (u *Updater) prepareWindows(installDir string) (Plan, error) {
+	shellName := "PowerShell"
+	shellPath, err := u.lookPath("pwsh")
+	if err == nil {
+		shellName = "PowerShell 7"
+	} else {
+		shellPath, err = u.lookPath("powershell.exe")
 		if err != nil {
-			return nil, fmt.Errorf("read update archive: %w", err)
-		}
-		if header.Typeflag == tar.TypeReg && filepath.Base(header.Name) == binaryName {
-			return readBinary(tarReader)
+			return Plan{}, errors.New("locate PowerShell: neither pwsh nor powershell.exe is available")
 		}
 	}
-	return nil, fmt.Errorf("binary %q not found in update archive", binaryName)
+
+	waitAndInstall := "$parent = Get-Process -Id " + strconv.Itoa(u.pid) +
+		" -ErrorAction SilentlyContinue; if ($parent) { $parent.WaitForExit() }; " +
+		"irm '" + installPowerShellScriptURL + "' | iex"
+	display := "$env:SPARKS_INSTALL_DIR=" + quotePowerShell(installDir) + "; irm '" +
+		installPowerShellScriptURL + "' | iex"
+	environment := withEnvironment(os.Environ(), "SPARKS_INSTALL_DIR", installDir, true)
+	environment = withEnvironment(environment, "SPARKS_SKIP_PATH_UPDATE", "1", true)
+	return Plan{
+		Shell:      shellName,
+		Command:    display,
+		Deferred:   true,
+		executable: shellPath,
+		args: []string{
+			"-NoLogo",
+			"-NoProfile",
+			"-ExecutionPolicy", "Bypass",
+			"-Command", waitAndInstall,
+		},
+		env: environment,
+	}, nil
 }
 
-func readBinary(reader io.Reader) ([]byte, error) {
-	binary, err := io.ReadAll(io.LimitReader(reader, maxBinaryBytes+1))
-	if err != nil {
-		return nil, fmt.Errorf("read updated binary: %w", err)
+func normalizeShell(value string) (string, string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", ""
 	}
-	if len(binary) > maxBinaryBytes {
-		return nil, errors.New("updated binary is too large")
+	normalized := strings.ReplaceAll(value, "\\", "/")
+	parts := strings.Split(normalized, "/")
+	rawName := strings.TrimSuffix(strings.ToLower(parts[len(parts)-1]), ".exe")
+	name := strings.TrimPrefix(rawName, "-")
+	if strings.HasPrefix(rawName, "-") {
+		value = name
 	}
-	return binary, nil
+	return name, value
 }
 
-type semVersion struct {
-	major      int
-	minor      int
-	patch      int
-	prerelease string
+func detectParentShell() string {
+	parentPID := os.Getppid()
+	if runtime.GOOS == "linux" {
+		data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(parentPID), "comm"))
+		if err == nil {
+			return strings.TrimSpace(string(data))
+		}
+	}
+	if runtime.GOOS == "darwin" {
+		output, err := exec.Command("ps", "-p", strconv.Itoa(parentPID), "-o", "comm=").Output()
+		if err == nil {
+			return strings.TrimSpace(string(output))
+		}
+	}
+	return ""
 }
 
-func parseVersion(raw string) (semVersion, error) {
-	normalized := strings.TrimPrefix(strings.TrimSpace(raw), "v")
-	normalized = strings.SplitN(normalized, "+", 2)[0]
-	parts := strings.SplitN(normalized, "-", 2)
-	numbers := strings.Split(parts[0], ".")
-	if len(numbers) != 3 {
-		return semVersion{}, fmt.Errorf("invalid semantic version %q", raw)
+func isSupportedUnixShell(shell string) bool {
+	switch shell {
+	case "bash", "zsh", "fish", "sh", "dash", "ksh":
+		return true
+	default:
+		return false
 	}
-	values := make([]int, 3)
-	for i, number := range numbers {
-		value, err := strconv.Atoi(number)
-		if err != nil || value < 0 {
-			return semVersion{}, fmt.Errorf("invalid semantic version %q", raw)
-		}
-		values[i] = value
-	}
-	parsed := semVersion{major: values[0], minor: values[1], patch: values[2]}
-	if len(parts) == 2 {
-		if parts[1] == "" {
-			return semVersion{}, fmt.Errorf("invalid semantic version %q", raw)
-		}
-		parsed.prerelease = parts[1]
-	}
-	return parsed, nil
 }
 
-func (v semVersion) String() string {
-	value := fmt.Sprintf("%d.%d.%d", v.major, v.minor, v.patch)
-	if v.prerelease != "" {
-		value += "-" + v.prerelease
+func withEnvironment(environment []string, key, value string, caseInsensitive bool) []string {
+	prefix := key + "="
+	result := make([]string, 0, len(environment)+1)
+	for _, entry := range environment {
+		matches := strings.HasPrefix(entry, prefix)
+		if caseInsensitive {
+			matches = strings.EqualFold(entry[:min(len(entry), len(prefix))], prefix)
+		}
+		if !matches {
+			result = append(result, entry)
+		}
 	}
-	return value
+	return append(result, prefix+value)
 }
 
-func compareVersions(left, right semVersion) int {
-	for _, pair := range [][2]int{{left.major, right.major}, {left.minor, right.minor}, {left.patch, right.patch}} {
-		if pair[0] < pair[1] {
-			return -1
-		}
-		if pair[0] > pair[1] {
-			return 1
-		}
+func quotePOSIX(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func quotePowerShell(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func runPlan(ctx context.Context, plan Plan, out, errOut io.Writer) error {
+	command := exec.CommandContext(ctx, plan.executable, plan.args...)
+	command.Env = plan.env
+	command.Stdin = os.Stdin
+	command.Stdout = out
+	command.Stderr = errOut
+	return command.Run()
+}
+
+func startPlan(plan Plan, out, errOut io.Writer) error {
+	command := exec.Command(plan.executable, plan.args...)
+	command.Env = plan.env
+	command.Stdin = os.Stdin
+	command.Stdout = out
+	command.Stderr = errOut
+	if err := command.Start(); err != nil {
+		return err
 	}
-	if left.prerelease == right.prerelease {
-		return 0
-	}
-	if left.prerelease == "" {
-		return 1
-	}
-	if right.prerelease == "" {
-		return -1
-	}
-	return strings.Compare(left.prerelease, right.prerelease)
+	return command.Process.Release()
 }

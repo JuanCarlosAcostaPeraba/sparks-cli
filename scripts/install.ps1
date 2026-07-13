@@ -29,53 +29,63 @@ $Tag = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
 $ReleaseVersion = $Tag.TrimStart("v")
 $Asset = "sparks_${ReleaseVersion}_windows_${Arch}.zip"
 $Url = "https://github.com/$Repo/releases/download/$Tag/$Asset"
+$ChecksumsUrl = "https://github.com/$Repo/releases/download/$Tag/checksums.txt"
 $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("sparks-install-" + [System.Guid]::NewGuid().ToString())
 $ArchivePath = Join-Path $TempDir $Asset
+$ChecksumsPath = Join-Path $TempDir "checksums.txt"
+
+function Download-File {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    $Curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($Curl) {
+        & $Curl.Source -fsSL -4 --retry 3 --connect-timeout 20 --max-time 120 --http1.1 --tlsv1.2 --ssl-no-revoke -o $Destination $Uri
+        if ($LASTEXITCODE -ne 0) {
+            throw "sparks installer: curl failed to download $Uri"
+        }
+        return
+    }
+
+    Invoke-WebRequest -Uri $Uri -OutFile $Destination
+}
 
 New-Item -ItemType Directory -Path $TempDir | Out-Null
 
-function Build-FromLocalCheckout {
-    if (-not (Test-Path "go.mod")) {
-        throw "sparks installer: release download failed and no local Go module was found."
-    }
-
-    $Module = Get-Content -Path "go.mod" -TotalCount 1
-    if ($Module -ne "module github.com/JuanCarlosAcostaPeraba/sparks-cli") {
-        throw "sparks installer: release download failed and this directory is not sparks-cli."
-    }
-
-    $Go = Get-Command go -ErrorAction SilentlyContinue
-    if (-not $Go) {
-        throw "sparks installer: release download failed and Go is not available for a local build."
-    }
-
-    $LocalBinary = Join-Path $TempDir "sparks.exe"
-    Write-Host "Release download failed; building sparks from this local checkout..."
-    & go build -o $LocalBinary .
-    if ($LASTEXITCODE -ne 0) {
-        throw "sparks installer: local build failed."
-    }
-
-    return $LocalBinary
-}
-
 try {
     Write-Host "Installing sparks $Tag for windows/$Arch..."
-    $BinaryPath = Join-Path $TempDir "sparks.exe"
-    try {
-        Invoke-WebRequest -Uri $Url -OutFile $ArchivePath
-        Expand-Archive -Path $ArchivePath -DestinationPath $TempDir -Force
+    Download-File -Uri $Url -Destination $ArchivePath
+    Download-File -Uri $ChecksumsUrl -Destination $ChecksumsPath
+
+    $ChecksumLine = Get-Content -LiteralPath $ChecksumsPath | Where-Object {
+        $Fields = $_ -split "\s+"
+        $Fields.Count -ge 2 -and $Fields[-1].TrimStart("*") -eq $Asset
+    } | Select-Object -First 1
+    if (-not $ChecksumLine) {
+        throw "sparks installer: checksum for $Asset was not published."
     }
-    catch {
-        $BinaryPath = Build-FromLocalCheckout
+
+    $Expected = (($ChecksumLine -split "\s+")[0]).ToLowerInvariant()
+    $Actual = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($Actual -ne $Expected) {
+        throw "sparks installer: checksum mismatch for $Asset."
+    }
+    Write-Host "Checksum verified."
+
+    Expand-Archive -Path $ArchivePath -DestinationPath $TempDir -Force
+    $BinaryPath = Join-Path $TempDir "sparks.exe"
+    if (-not (Test-Path -LiteralPath $BinaryPath)) {
+        throw "sparks installer: sparks.exe was not found in $Asset."
     }
 
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    Copy-Item -Path $BinaryPath -Destination (Join-Path $InstallDir "sparks.exe") -Force
+    Copy-Item -LiteralPath $BinaryPath -Destination (Join-Path $InstallDir "sparks.exe") -Force
 
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
     $PathEntries = $UserPath -split ";" | Where-Object { $_ }
-    if ($PathEntries -notcontains $InstallDir) {
+    if ($env:SPARKS_SKIP_PATH_UPDATE -ne "1" -and $PathEntries -notcontains $InstallDir) {
         $NewPath = if ($UserPath) { "$UserPath;$InstallDir" } else { $InstallDir }
         [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
         $env:Path = "$env:Path;$InstallDir"

@@ -14,6 +14,7 @@ need() {
 
 need curl
 need tar
+need awk
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$os" in
@@ -54,6 +55,7 @@ esac
 release_version="${tag#v}"
 asset="sparks_${release_version}_${os}_${arch}.tar.gz"
 url="https://github.com/$repo/releases/download/$tag/$asset"
+checksums_url="https://github.com/$repo/releases/download/$tag/checksums.txt"
 tmp_dir="$(mktemp -d)"
 
 cleanup() {
@@ -62,7 +64,30 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "Installing sparks $tag for $os/$arch..."
-curl -fL "$url" -o "$tmp_dir/$asset"
+curl -fL --retry 3 "$url" -o "$tmp_dir/$asset"
+curl -fsSL --retry 3 "$checksums_url" -o "$tmp_dir/checksums.txt"
+
+expected="$(awk -v asset="$asset" '$2 == asset || $2 == "*" asset { print $1; exit }' "$tmp_dir/checksums.txt")"
+if [ -z "$expected" ]; then
+  echo "sparks installer: checksum for $asset was not published" >&2
+  exit 1
+fi
+
+if command -v sha256sum >/dev/null 2>&1; then
+  actual="$(sha256sum "$tmp_dir/$asset" | awk '{ print $1 }')"
+elif command -v shasum >/dev/null 2>&1; then
+  actual="$(shasum -a 256 "$tmp_dir/$asset" | awk '{ print $1 }')"
+else
+  echo "sparks installer: missing SHA-256 tool (sha256sum or shasum)" >&2
+  exit 1
+fi
+
+if [ "$actual" != "$expected" ]; then
+  echo "sparks installer: checksum mismatch for $asset" >&2
+  exit 1
+fi
+
+echo "Checksum verified."
 tar -xzf "$tmp_dir/$asset" -C "$tmp_dir"
 
 mkdir -p "$install_dir"

@@ -31,12 +31,12 @@ The installer downloads the matching release archive, installs `sparks.exe` unde
 ### Options
 
 ```bash
-SPARKS_VERSION=1.1.1 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
+SPARKS_VERSION=1.2.0 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
 SPARKS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
 ```
 
 ```powershell
-$env:SPARKS_VERSION = "1.1.1"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
+$env:SPARKS_VERSION = "1.2.0"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
 $env:SPARKS_INSTALL_DIR = "$HOME\bin"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
 ```
 
@@ -120,17 +120,28 @@ go run . list
 ## Releases
 
 Installed release binaries can update themselves with `sparks update`. The
-command verifies the GoReleaser SHA-256 checksum before replacing the current
-executable.
+command detects `bash`, `zsh`, `fish`, or another POSIX shell on macOS and
+Linux, then runs the official `curl` installer. On Windows it launches the
+PowerShell installer after the current process exits, avoiding executable file
+locks. Both installers target the active executable directory and verify the
+GoReleaser SHA-256 checksum. Set `SPARKS_SHELL` to override Unix shell
+detection.
 
 Releases are handled by GoReleaser. Tag-based GitHub Actions builds publish archives and checksums.
 
 ```bash
-git tag v1.1.1
-git push origin v1.1.1
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 ## Roadmap
+
+### v1.2.0 — shell-aware updates
+
+- Shell detection for bash, zsh, fish, and POSIX-compatible shells
+- Official installer delegation with active executable targeting
+- Deferred PowerShell replacement on Windows to avoid file locks
+- SHA-256 verification in both installation scripts
 
 ### v1.1.1 — updater reliability
 
