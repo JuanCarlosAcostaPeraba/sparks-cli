@@ -1,5 +1,12 @@
 # Roadmap
 
+## v1.1.0 — TUI workflow
+
+- Consistent fixed-width `[ ]`, `[!]`, and `[x]` status indicators
+- Search inside the TUI with `s` or `/`
+- Active-only and complete listing views toggled with `v`
+- Completed-spark cleanup with `C` and confirmation
+
 ## v1.0.0 — stable
 
 - Native Go CLI with local SQLite storage
