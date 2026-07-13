@@ -1,27 +1,22 @@
 # Roadmap
 
-## v0.1.0
+## v1.0.0 — stable
 
-- Core CLI
-- Add/list/done/important/remove/search/tree
-- SQLite storage
-- JSON output
-- Tests
-- GitHub Actions
-- GoReleaser config
-- Homebrew Tap config
+- Native Go CLI with local SQLite storage
+- Complete command workflow for capturing and organizing sparks
+- Nested parent-child thoughts and hierarchical tree output
+- Navigable full-screen TUI with keyboard actions
+- Color and visual feedback with accessible plain-output fallbacks
+- JSON output, redirected command mode, and self-update support
+- Tested GoReleaser artifacts for Windows, macOS, and Linux
 
-## v0.2.0
+## Distribution
 
-- Edit command
-- Tags
-- Export/import
-- Shell completions
-- Better themes
+- Homebrew
+- Scoop, winget, AUR, and Nix
 
-## v0.3.0
+## Future
 
-- TUI mode
-- Optional encrypted sync
+- Export/import and optional encrypted sync
 - Raycast/Alfred integration ideas
-- More package managers: Scoop, winget, AUR, Nix
+- Rust implementation on `main` while retaining the Go implementation on a dedicated branch

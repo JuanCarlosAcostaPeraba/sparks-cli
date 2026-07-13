@@ -15,8 +15,8 @@ func newEditCommand() *cobra.Command {
 
 The ID is the real spark ID shown by list or JSON output. Editing preserves the
 spark's status, importance and parent-child relationships.`,
-		Example: `  sparks edit 3 "Ship v0.2.0"
-  sparks e 3 "Ship v0.2.0"`,
+		Example: `  sparks edit 3 "Ship v1.0.0"
+  sparks e 3 "Ship v1.0.0"`,
 		Args: requireArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return handleRun(cmd, func(application *app.App) error {

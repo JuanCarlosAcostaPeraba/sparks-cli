@@ -59,7 +59,7 @@ func (a *App) Edit(ctx context.Context, rawID, title string) (model.Spark, error
 	}
 	title = strings.TrimSpace(title)
 	if title == "" {
-		return model.Spark{}, errors.New("provide a new title, for example: sparks edit 3 \"ship v0.2.0\"")
+		return model.Spark{}, errors.New("provide a new title, for example: sparks edit 3 \"ship v1.0.0\"")
 	}
 	return a.repo.UpdateTitle(ctx, id, title)
 }

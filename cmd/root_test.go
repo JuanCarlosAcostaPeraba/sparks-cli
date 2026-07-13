@@ -70,7 +70,7 @@ func TestVersionCommandPrintsOnlyVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version failed: %v\nstderr: %s", err, errOut)
 	}
-	if out != "sparks 0.2.0\n" {
+	if out != "sparks 1.0.0\n" {
 		t.Fatalf("unexpected version output: %q", out)
 	}
 }

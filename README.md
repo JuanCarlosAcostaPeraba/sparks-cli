@@ -31,12 +31,12 @@ The installer downloads the matching release archive, installs `sparks.exe` unde
 ### Options
 
 ```bash
-SPARKS_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
+SPARKS_VERSION=1.0.0 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
 SPARKS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
 ```
 
 ```powershell
-$env:SPARKS_VERSION = "0.1.0"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
+$env:SPARKS_VERSION = "1.0.0"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
 $env:SPARKS_INSTALL_DIR = "$HOME\bin"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
 ```
 
@@ -124,35 +124,30 @@ executable.
 Releases are handled by GoReleaser. Tag-based GitHub Actions builds publish archives and checksums.
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 ## Roadmap
 
-### v0.1.0
+### v1.0.0 — stable
 
-- Core CLI
-- Add/list/edit/done/important/remove/search/tree
-- SQLite storage
-- JSON output
-- Tests
-- GitHub Actions
-- GoReleaser config
+- Native Go CLI with local SQLite storage
+- Add, list, edit, complete, prioritize, remove, search, clear, and tree commands
+- Nested thoughts with parent-child relationships
+- Full-screen navigable TUI with inline actions and keyboard help
+- Color-coded IDs, states, selections, and action feedback with `NO_COLOR` support
+- JSON and redirected output suitable for scripts
+- Verified self-update command and cross-platform installers
+- GoReleaser archives and checksums for Windows, macOS, and Linux
 
-### v0.2.0
+### Next
 
-- Tags
-- Export/import
-- Shell completions
-- Better themes
-
-### v0.3.0
-
-- TUI mode
+- Homebrew distribution
 - Optional encrypted sync
 - Raycast/Alfred integration ideas
-- More package managers: Scoop, winget, AUR, Nix
+- More package managers: Scoop, winget, AUR, and Nix
+- Long-term Rust implementation while retaining the Go branch
 
 ## License
 
