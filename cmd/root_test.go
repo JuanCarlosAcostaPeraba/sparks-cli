@@ -22,7 +22,7 @@ func TestRootCommandAddAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list failed: %v\nstderr: %s", err, errOut)
 	}
-	if !strings.Contains(out, "STATUS  ID  TITLE") || !strings.Contains(out, "□       1   Prepare Codex prompt") {
+	if !strings.Contains(out, "STATUS  ID  TITLE") || !strings.Contains(out, "[ ]     1   Prepare Codex prompt") {
 		t.Fatalf("unexpected list output: %q", out)
 	}
 }
@@ -149,7 +149,7 @@ func TestRootCommandAddsChildSpark(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tree failed: %v\nstderr: %s", err, errOut)
 	}
-	if !strings.Contains(out, "└─ □ 1) Parent idea") || !strings.Contains(out, "   └─ □ 1.1) Child idea") {
+	if !strings.Contains(out, "└─ [ ] 1) Parent idea") || !strings.Contains(out, "   └─ [ ] 1.1) Child idea") {
 		t.Fatalf("unexpected tree output: %q", out)
 	}
 }

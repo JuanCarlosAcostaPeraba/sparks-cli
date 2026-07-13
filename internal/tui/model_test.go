@@ -95,7 +95,7 @@ func TestModelColorHighlightsSelectionIDsImportantAndFeedback(t *testing.T) {
 		"\x1b[1;30;46m",
 		"\x1b[36m#2\x1b[0m",
 		"\x1b[36m#1\x1b[0m",
-		"\x1b[1;33mimportant\x1b[0m",
+		"\x1b[1;33m[!] important\x1b[0m",
 		"\x1b[35m?\x1b[0m",
 	} {
 		if !strings.Contains(view, want) {
@@ -110,10 +110,19 @@ func TestModelColorHighlightsSelectionIDsImportantAndFeedback(t *testing.T) {
 }
 
 func TestModelWithoutColorContainsNoANSI(t *testing.T) {
-	service := &fakeService{sparks: []model.Spark{{ID: 1, Title: "Plain"}}}
+	service := &fakeService{sparks: []model.Spark{
+		{ID: 1, Title: "Plain"},
+		{ID: 2, Title: "Important", Important: true},
+		{ID: 3, Title: "Completed", Done: true},
+	}}
 	m := loadModel(t, New(context.Background(), service, WithColor(false)))
 	if strings.Contains(m.View(), "\x1b[") {
 		t.Fatalf("plain TUI contains ANSI escapes:\n%s", m.View())
+	}
+	for _, want := range []string{"[ ] active", "[!] important", "[x] done"} {
+		if !strings.Contains(m.View(), want) {
+			t.Fatalf("expected %q in TUI:\n%s", want, m.View())
+		}
 	}
 }
 

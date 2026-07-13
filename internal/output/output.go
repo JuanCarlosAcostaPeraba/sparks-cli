@@ -83,12 +83,7 @@ func (r Renderer) colorTableLine(line string, spark model.Spark) string {
 		return line
 	}
 
-	role := presentation.Muted
-	if spark.Important {
-		role = presentation.Important
-	} else if spark.Done {
-		role = presentation.Completed
-	}
+	role := presentation.StateFor(spark.Done, spark.Important).Role
 
 	var result strings.Builder
 	result.WriteString(r.palette.Paint(role, status))
@@ -135,12 +130,7 @@ func (r Renderer) Tree(sparks []model.Spark, asJSON bool) error {
 				connector = "└─"
 				nextPrefix = prefix + "   "
 			}
-			role := presentation.Muted
-			if spark.Important {
-				role = presentation.Important
-			} else if spark.Done {
-				role = presentation.Completed
-			}
+			role := presentation.StateFor(spark.Done, spark.Important).Role
 			title := spark.Title
 			if spark.Important || spark.Done {
 				title = r.palette.Paint(role, title)
@@ -193,12 +183,5 @@ func (r Renderer) ID(value any) string {
 }
 
 func symbol(spark model.Spark) string {
-	switch {
-	case spark.Done:
-		return "☑"
-	case spark.Important:
-		return "❗"
-	default:
-		return "□"
-	}
+	return presentation.StateFor(spark.Done, spark.Important).Indicator
 }
