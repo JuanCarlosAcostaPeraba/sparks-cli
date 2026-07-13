@@ -12,20 +12,33 @@ import (
 )
 
 type fakeService struct {
-	sparks      []model.Spark
-	listErr     error
-	addedTitle  string
-	addedParent string
-	editedID    string
-	editedTitle string
-	importantID string
-	doneID      string
-	removedID   string
-	actionErr   error
+	sparks        []model.Spark
+	searchResults []model.Spark
+	listErr       error
+	searchErr     error
+	listOpts      model.ListOptions
+	searchOpts    model.ListOptions
+	searchQuery   string
+	addedTitle    string
+	addedParent   string
+	editedID      string
+	editedTitle   string
+	importantID   string
+	doneID        string
+	removedID     string
+	clearCount    int64
+	clearCalls    int
+	actionErr     error
 }
 
-func (f *fakeService) List(context.Context, model.ListOptions) ([]model.Spark, error) {
+func (f *fakeService) List(_ context.Context, opts model.ListOptions) ([]model.Spark, error) {
+	f.listOpts = opts
 	return append([]model.Spark(nil), f.sparks...), f.listErr
+}
+
+func (f *fakeService) Search(_ context.Context, query string, opts model.ListOptions) ([]model.Spark, error) {
+	f.searchQuery, f.searchOpts = query, opts
+	return append([]model.Spark(nil), f.searchResults...), f.searchErr
 }
 
 func (f *fakeService) Add(_ context.Context, title string, opts app.AddOptions) (model.Spark, error) {
@@ -51,6 +64,14 @@ func (f *fakeService) Done(_ context.Context, id string) (model.Spark, error) {
 func (f *fakeService) Remove(_ context.Context, id string) error {
 	f.removedID = id
 	return f.actionErr
+}
+
+func (f *fakeService) Clear(_ context.Context, all bool) (int64, error) {
+	if all {
+		return 0, errors.New("TUI must not clear all sparks")
+	}
+	f.clearCalls++
+	return f.clearCount, f.actionErr
 }
 
 func TestModelLoadsAndNavigatesSparks(t *testing.T) {
@@ -186,12 +207,140 @@ func TestModelRunsSelectedActions(t *testing.T) {
 	}
 }
 
+func TestModelSearchesAndClearsSearch(t *testing.T) {
+	service := &fakeService{
+		sparks:        []model.Spark{{ID: 1, Title: "Normal"}},
+		searchResults: []model.Spark{{ID: 2, Title: "Release notes"}},
+	}
+	m := loadModel(t, New(context.Background(), service))
+	m, _ = update(t, m, key("s"))
+	if m.mode != searchMode || !strings.Contains(m.View(), "Search:") {
+		t.Fatalf("search prompt did not open:\n%s", m.View())
+	}
+	m, _ = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("release")})
+	m.cursor = 9
+	m, cmd := update(t, m, key("enter"))
+	m = applyCommand(t, m, cmd)
+	if service.searchQuery != "release" || service.searchOpts.IncludeDone {
+		t.Fatalf("search = %q, opts = %#v", service.searchQuery, service.searchOpts)
+	}
+	if m.query != "release" || len(m.sparks) != 1 || m.sparks[0].ID != 2 || m.cursor != 0 {
+		t.Fatalf("unexpected search model: query=%q cursor=%d sparks=%#v", m.query, m.cursor, m.sparks)
+	}
+	if !strings.Contains(m.View(), `Search:`) || !strings.Contains(m.View(), `"release"`) {
+		t.Fatalf("active query is not visible:\n%s", m.View())
+	}
+
+	m, cmd = update(t, m, key("esc"))
+	m = applyCommand(t, m, cmd)
+	if m.query != "" || len(m.sparks) != 1 || m.sparks[0].ID != 1 {
+		t.Fatalf("search was not cleared: query=%q sparks=%#v", m.query, m.sparks)
+	}
+}
+
+func TestModelSearchCanBeCancelledAndBlankSearchClearsQuery(t *testing.T) {
+	service := &fakeService{sparks: []model.Spark{{ID: 1, Title: "Normal"}}}
+	m := loadModel(t, New(context.Background(), service))
+	m.query = "existing"
+	m, _ = update(t, m, key("s"))
+	m, _ = update(t, m, key("esc"))
+	if m.query != "existing" || m.mode != browseMode {
+		t.Fatalf("cancel changed query: %q", m.query)
+	}
+
+	m, _ = update(t, m, key("s"))
+	m, _ = update(t, m, key("ctrl+u"))
+	m, cmd := update(t, m, key("enter"))
+	m = applyCommand(t, m, cmd)
+	if m.query != "" || service.searchQuery != "" {
+		t.Fatalf("blank search did not clear query")
+	}
+}
+
+func TestModelTogglesCompletedVisibilityAndSearchScope(t *testing.T) {
+	service := &fakeService{
+		sparks:        []model.Spark{{ID: 1, Title: "Active"}},
+		searchResults: []model.Spark{{ID: 2, Title: "Completed match", Done: true}},
+	}
+	m := loadModel(t, New(context.Background(), service))
+	m, cmd := update(t, m, key("v"))
+	m = applyCommand(t, m, cmd)
+	if !m.showAll || !service.listOpts.IncludeDone || !strings.Contains(m.View(), "View: all sparks") {
+		t.Fatalf("all view not enabled: opts=%#v\n%s", service.listOpts, m.View())
+	}
+
+	m.query = "match"
+	m, cmd = update(t, m, key("r"))
+	applyCommand(t, m, cmd)
+	if service.searchQuery != "match" || !service.searchOpts.IncludeDone {
+		t.Fatalf("search did not inherit all view: query=%q opts=%#v", service.searchQuery, service.searchOpts)
+	}
+
+	m, cmd = update(t, m, key("v"))
+	m = applyCommand(t, m, cmd)
+	if m.showAll || service.searchOpts.IncludeDone || !strings.Contains(m.View(), "View: active only") {
+		t.Fatalf("active-only view not restored: opts=%#v\n%s", service.searchOpts, m.View())
+	}
+}
+
+func TestModelConfirmsBeforeClearingCompleted(t *testing.T) {
+	service := &fakeService{sparks: []model.Spark{{ID: 1, Title: "Active"}}, clearCount: 3}
+	m := loadModel(t, New(context.Background(), service))
+	m, _ = update(t, m, key("C"))
+	if m.mode != confirmClearMode || !strings.Contains(m.View(), "Clear all completed sparks? y/n") {
+		t.Fatalf("clear confirmation missing:\n%s", m.View())
+	}
+	m, _ = update(t, m, key("n"))
+	if service.clearCalls != 0 || m.status != "Clear cancelled" {
+		t.Fatalf("clear cancellation failed: calls=%d status=%q", service.clearCalls, m.status)
+	}
+
+	m, _ = update(t, m, key("C"))
+	m, cmd := update(t, m, key("y"))
+	m = applyCommand(t, m, cmd)
+	if service.clearCalls != 1 || m.status != "Cleared 3 completed spark(s)" {
+		t.Fatalf("clear result: calls=%d status=%q", service.clearCalls, m.status)
+	}
+}
+
+func TestModelShowsSearchAndClearErrors(t *testing.T) {
+	service := &fakeService{searchErr: errors.New("search unavailable")}
+	m := loadModel(t, New(context.Background(), service))
+	m, _ = update(t, m, key("s"))
+	m, _ = update(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("query")})
+	m, cmd := update(t, m, key("enter"))
+	m = applyCommand(t, m, cmd)
+	if !strings.Contains(m.status, "search unavailable") {
+		t.Fatalf("missing search error: %q", m.status)
+	}
+
+	service.searchErr = nil
+	service.actionErr = errors.New("clear unavailable")
+	m.query = ""
+	m, _ = update(t, m, key("C"))
+	m, cmd = update(t, m, key("y"))
+	m = applyCommand(t, m, cmd)
+	if !strings.Contains(m.status, "clear unavailable") {
+		t.Fatalf("missing clear error: %q", m.status)
+	}
+}
+
 func TestModelShowsEmptyHelpAndErrors(t *testing.T) {
 	service := &fakeService{}
 	m := loadModel(t, New(context.Background(), service))
 	if !strings.Contains(m.View(), "No active sparks") {
 		t.Fatalf("missing empty state:\n%s", m.View())
 	}
+	m.query = "missing"
+	if !strings.Contains(m.View(), `No sparks match "missing"`) {
+		t.Fatalf("missing search empty state:\n%s", m.View())
+	}
+	m.query = ""
+	m.showAll = true
+	if !strings.Contains(m.View(), "No sparks yet") {
+		t.Fatalf("missing all-sparks empty state:\n%s", m.View())
+	}
+	m.showAll = false
 	m, _ = update(t, m, key("?"))
 	if !strings.Contains(m.View(), "HELP") {
 		t.Fatalf("missing help view:\n%s", m.View())

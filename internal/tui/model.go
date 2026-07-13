@@ -22,11 +22,13 @@ const logo = `
 
 type Service interface {
 	List(context.Context, model.ListOptions) ([]model.Spark, error)
+	Search(context.Context, string, model.ListOptions) ([]model.Spark, error)
 	Add(context.Context, string, app.AddOptions) (model.Spark, error)
 	Edit(context.Context, string, string) (model.Spark, error)
 	Important(context.Context, string) (model.Spark, error)
 	Done(context.Context, string) (model.Spark, error)
 	Remove(context.Context, string) error
+	Clear(context.Context, bool) (int64, error)
 }
 
 type inputMode int
@@ -36,6 +38,8 @@ const (
 	addMode
 	editMode
 	childMode
+	searchMode
+	confirmClearMode
 	helpMode
 )
 
@@ -50,6 +54,8 @@ type Model struct {
 	loading bool
 	status  string
 	palette presentation.Palette
+	query   string
+	showAll bool
 }
 
 type loadedMsg struct {
@@ -94,8 +100,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.clampCursor()
 		return m, nil
 	case tea.KeyMsg:
-		if m.mode == addMode || m.mode == editMode || m.mode == childMode {
+		if m.mode == addMode || m.mode == editMode || m.mode == childMode || m.mode == searchMode {
 			return m.updateInput(msg)
+		}
+		if m.mode == confirmClearMode {
+			return m.updateClearConfirmation(msg)
 		}
 		if m.mode == helpMode {
 			if msg.String() == "?" || msg.String() == "esc" || msg.String() == "q" {
@@ -112,6 +121,13 @@ func (m Model) updateBrowse(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "ctrl+c", "q":
 		return m, tea.Quit
+	case "esc":
+		if m.query != "" {
+			m.query = ""
+			m.cursor = 0
+			m.loading = true
+			return m, m.load("Search cleared")
+		}
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
@@ -122,6 +138,20 @@ func (m Model) updateBrowse(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "a":
 		m.beginInput(addMode, nil)
+	case "s", "/":
+		m.beginInput(searchMode, []rune(m.query))
+	case "v":
+		m.showAll = !m.showAll
+		m.cursor = 0
+		m.loading = true
+		status := "Showing active sparks"
+		if m.showAll {
+			status = "Showing all sparks"
+		}
+		return m, m.load(status)
+	case "C":
+		m.mode = confirmClearMode
+		m.status = ""
 	case "e":
 		if selected := m.selected(); selected != nil {
 			m.beginInput(editMode, []rune(selected.Title))
@@ -169,7 +199,20 @@ func (m Model) updateInput(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+u":
 		m.input = nil
 	case "enter":
-		title := strings.TrimSpace(string(m.input))
+		value := strings.TrimSpace(string(m.input))
+		if m.mode == searchMode {
+			m.query = value
+			m.mode = browseMode
+			m.input = nil
+			m.cursor = 0
+			m.loading = true
+			status := "Search cleared"
+			if value != "" {
+				status = fmt.Sprintf("Searching for %q", value)
+			}
+			return m, m.load(status)
+		}
+		title := value
 		if title == "" {
 			m.status = "A title is required"
 			return m, nil
@@ -191,6 +234,21 @@ func (m Model) updateInput(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if key.Type == tea.KeyRunes {
 			m.input = append(m.input, key.Runes...)
 		}
+	}
+	return m, nil
+}
+
+func (m Model) updateClearConfirmation(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "y", "Y":
+		m.mode = browseMode
+		m.loading = true
+		return m, m.clearCompleted()
+	case "n", "N", "esc":
+		m.mode = browseMode
+		m.status = "Clear cancelled"
 	}
 	return m, nil
 }
@@ -218,9 +276,17 @@ func (m *Model) clampCursor() {
 
 func (m Model) load(status string) tea.Cmd {
 	return func() tea.Msg {
-		sparks, err := m.service.List(m.ctx, model.ListOptions{})
+		sparks, err := m.fetch()
 		return loadedMsg{sparks: sparks, err: err, status: status}
 	}
+}
+
+func (m Model) fetch() ([]model.Spark, error) {
+	opts := model.ListOptions{IncludeDone: m.showAll}
+	if m.query != "" {
+		return m.service.Search(m.ctx, m.query, opts)
+	}
+	return m.service.List(m.ctx, opts)
 }
 
 func (m Model) after(action func() error, status string) tea.Cmd {
@@ -228,8 +294,23 @@ func (m Model) after(action func() error, status string) tea.Cmd {
 		if err := action(); err != nil {
 			return loadedMsg{err: err}
 		}
-		sparks, err := m.service.List(m.ctx, model.ListOptions{})
+		sparks, err := m.fetch()
 		return loadedMsg{sparks: sparks, err: err, status: status}
+	}
+}
+
+func (m Model) clearCompleted() tea.Cmd {
+	return func() tea.Msg {
+		count, err := m.service.Clear(m.ctx, false)
+		if err != nil {
+			return loadedMsg{err: err}
+		}
+		sparks, err := m.fetch()
+		return loadedMsg{
+			sparks: sparks,
+			err:    err,
+			status: fmt.Sprintf("Cleared %d completed spark(s)", count),
+		}
 	}
 }
 
@@ -279,13 +360,27 @@ func (m Model) View() string {
 	view.WriteString("\n\n  Capture ideas, tasks and nested thoughts without leaving the terminal.\n")
 	view.WriteString("  " + m.key("↑/↓") + " or " + m.key("j/k") + " navigate · " +
 		m.key("a") + " add · " + m.key("e") + " edit · " + m.key("i") + " important · " +
-		m.key("c") + " child · " + m.key("d") + " done · " + m.key("x") + " remove\n\n")
+		m.key("c") + " child · " + m.key("d") + " done · " + m.key("x") + " remove\n")
+	view.WriteString("  " + m.key("s") + " search · " + m.key("v") + " active/all · " +
+		m.key("C") + " clear completed\n\n")
+
+	viewMode := "active only"
+	if m.showAll {
+		viewMode = "all sparks"
+	}
+	view.WriteString("  " + m.palette.Paint(presentation.Muted, "View:") + " " + viewMode)
+	if m.query != "" {
+		view.WriteString(" · " + m.palette.Paint(presentation.Muted, "Search:") + " " + fmt.Sprintf("%q", m.query))
+	}
+	view.WriteString("\n\n")
 
 	if m.mode == helpMode {
 		view.WriteString(m.palette.Paint(presentation.Important, "  HELP") + "\n")
 		view.WriteString("  a add a root spark       e edit the selected spark\n")
 		view.WriteString("  c add a child            i toggle important\n")
 		view.WriteString("  d mark done              x remove\n")
+		view.WriteString("  s or / search            Esc clear search\n")
+		view.WriteString("  v toggle active/all      C clear completed\n")
 		view.WriteString("  r refresh                q quit\n")
 		view.WriteString("  Press ?, Esc or q to return.\n")
 		return view.String()
@@ -303,7 +398,13 @@ func (m Model) View() string {
 	view.WriteByte('\n')
 
 	if len(m.sparks) == 0 {
-		view.WriteString("       No active sparks. Press a to capture one.\n")
+		empty := "No active sparks. Press a to capture one."
+		if m.query != "" {
+			empty = fmt.Sprintf("No sparks match %q.", m.query)
+		} else if m.showAll {
+			empty = "No sparks yet. Press a to capture one."
+		}
+		view.WriteString("       " + empty + "\n")
 	} else {
 		for index, spark := range m.sparks {
 			pointer := " "
@@ -342,6 +443,10 @@ func (m Model) View() string {
 	case childMode:
 		selected := m.selected()
 		fmt.Fprintf(&view, "  Child of #%d: %s█\n", selected.ID, string(m.input))
+	case searchMode:
+		fmt.Fprintf(&view, "  Search: %s█\n", string(m.input))
+	case confirmClearMode:
+		view.WriteString("  " + m.palette.Paint(presentation.Warning, "Clear all completed sparks? y/n") + "\n")
 	default:
 		if m.status != "" {
 			role := presentation.Success

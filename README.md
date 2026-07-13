@@ -71,7 +71,9 @@ sparks version
 The default command opens a full-screen interactive table when the terminal is
 interactive. Navigate with the arrow keys or `j`/`k`; use `a` to add, `e` to
 edit, `i` to toggle importance, `c` to add a child to the selected spark, `d`
-to complete, and `x` to remove. Press `?` for help or `q` to quit.
+to complete, and `x` to remove. Use `s` or `/` to search, `v` to switch
+between active-only and all sparks, and `C` to clear completed sparks after a
+confirmation. Press `?` for help or `q` to quit.
 
 ```txt
   SEL  ID     STATE       TITLE
