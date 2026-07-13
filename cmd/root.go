@@ -37,7 +37,7 @@ local SQLite database stored in your application data directory.
 Create sub-ideas with add --parent <id>, where <id> is the parent spark ID
 shown by list or JSON output.`,
 		Example: `  sparks
-  sparks add "Prepare release notes"
+  sparks add Prepare release notes
   sparks add --parent 1 "Document install steps"
   sparks tree
   sparks done 2`,

@@ -25,10 +25,13 @@ sparks list -j
 ## Add
 
 ```bash
-sparks add "Create GoReleaser config"
-sparks + "Create Homebrew tap"
+sparks add Create GoReleaser config
+sparks + Create Homebrew tap
 sparks add -p 1 "Create child spark"
 ```
+
+Quotes remain supported but are optional; every positional word after `add` is
+joined into the spark title.
 
 ## Edit
 

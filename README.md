@@ -48,8 +48,8 @@ Homebrew, Scoop, and winget packages are planned after the MVP.
 sparks
 sparks list
 sparks list -a
-sparks add "Prepare Codex prompt"
-sparks + "Create Homebrew tap"
+sparks add Prepare Codex prompt
+sparks + Create Homebrew tap
 sparks add --parent 1 "Add release notes"
 sparks edit 1 "Prepare release notes"
 sparks e 1 "Prepare release notes"
