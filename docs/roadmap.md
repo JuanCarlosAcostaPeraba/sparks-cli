@@ -1,5 +1,10 @@
 # Roadmap
 
+## v1.1.1 — updater reliability
+
+- Visible update progress and actionable errors
+- Resilient Windows release downloads with retries and a `curl.exe` fallback
+
 ## v1.1.0 — TUI workflow
 
 - Consistent fixed-width `[ ]`, `[!]`, and `[x]` status indicators

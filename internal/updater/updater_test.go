@@ -55,6 +55,10 @@ func TestUpdateDownloadsVerifiesAndAppliesRelease(t *testing.T) {
 	updater.goos = "windows"
 	updater.goarch = "amd64"
 	updater.executablePath = target
+	var stages []ProgressStage
+	updater.OnProgress(func(stage ProgressStage) {
+		stages = append(stages, stage)
+	})
 	updater.apply = func(reader io.Reader, gotTarget string, _ os.FileMode) error {
 		if gotTarget != target {
 			t.Fatalf("target = %q, want %q", gotTarget, target)
@@ -73,6 +77,55 @@ func TestUpdateDownloadsVerifiesAndAppliesRelease(t *testing.T) {
 	}
 	if !bytes.Equal(applied, binary) {
 		t.Fatalf("applied binary = %q, want %q", applied, binary)
+	}
+	wantStages := []ProgressStage{ProgressChecking, ProgressDownloading, ProgressVerifying, ProgressInstalling}
+	if fmt.Sprint(stages) != fmt.Sprint(wantStages) {
+		t.Fatalf("progress stages = %v, want %v", stages, wantStages)
+	}
+}
+
+func TestDownloadRetriesBeforeUsingFallback(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		http.Error(w, "try again", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	updater := New("1.0.0")
+	updater.client = server.Client()
+	fallbackCalls := 0
+	updater.fallback = func(_ context.Context, url string, limit int64) ([]byte, error) {
+		fallbackCalls++
+		if url != server.URL || limit != 16 {
+			t.Fatalf("fallback called with url=%q limit=%d", url, limit)
+		}
+		return []byte("fallback"), nil
+	}
+
+	data, err := updater.download(context.Background(), server.URL, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "fallback" || attempts != maxDownloadTries || fallbackCalls != 1 {
+		t.Fatalf("data=%q attempts=%d fallbackCalls=%d", data, attempts, fallbackCalls)
+	}
+}
+
+func TestDownloadDoesNotFallbackForPermanentHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	updater := New("1.0.0")
+	updater.client = server.Client()
+	updater.fallback = func(context.Context, string, int64) ([]byte, error) {
+		t.Fatal("fallback should not be used for a permanent HTTP error")
+		return nil, nil
+	}
+
+	_, err := updater.download(context.Background(), server.URL, 16)
+	if err == nil || !strings.Contains(err.Error(), "404 Not Found") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
