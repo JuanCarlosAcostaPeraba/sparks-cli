@@ -15,6 +15,8 @@ Use the arrow keys or `j`/`k` to select a spark. The available actions are:
 
 Redirected input or output uses the compatible line prompt, which accepts any
 regular command without the leading `sparks` and exits with `exit` or `quit`.
+Colors are enabled only on interactive terminals. Set `NO_COLOR` to disable
+them; JSON and redirected output never contain ANSI escape sequences.
 
 ## List
 

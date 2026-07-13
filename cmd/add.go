@@ -37,7 +37,7 @@ JSON output. Child sparks appear nested under their parent in tree output.`,
 				if err != nil {
 					return err
 				}
-				output.Message(stdout(cmd), "Added spark %d", spark.ID)
+				output.Message(stdout(cmd), "Added spark %s", output.ID(stdout(cmd), spark.ID))
 				return nil
 			})
 		},

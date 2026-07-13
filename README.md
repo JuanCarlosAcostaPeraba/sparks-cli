@@ -92,6 +92,11 @@ STATUS  ID  TITLE
 Flags have short aliases: `-a` for `--all`, `-j` for `--json`, `-p` for
 `--parent`, `-y` for `--yes`, and `-d` for `--db`.
 
+Interactive terminal output uses color to distinguish IDs, important and
+completed sparks, selections, shortcuts, and action feedback. Color is omitted
+from JSON and redirected output; set the standard `NO_COLOR` environment
+variable to disable it in a terminal as well.
+
 ## Data Location
 
 - macOS: `~/Library/Application Support/sparks/sparks.db`

@@ -25,7 +25,7 @@ commands that support it.`,
 				if err != nil {
 					return err
 				}
-				output.Message(stdout(cmd), "Completed spark %d", spark.ID)
+				output.Message(stdout(cmd), "Completed spark %s", output.ID(stdout(cmd), spark.ID))
 				return nil
 			})
 		},
