@@ -30,9 +30,9 @@ func NewRootCommand(out, errOut io.Writer) *cobra.Command {
 		Short: "A tiny, fast CLI to capture ideas, tasks and nested thoughts.",
 		Long: `sparks captures ideas, tasks and nested thoughts without leaving the terminal.
 
-Run sparks with no command to list active items. Use add, edit, done, important,
-remove, search and tree to keep lightweight notes organized in a local SQLite
-database stored in your application data directory.
+Run sparks with no command to start an interactive session. Use add, edit, done,
+important, remove, search and tree to keep lightweight notes organized in a
+local SQLite database stored in your application data directory.
 
 Create sub-ideas with add --parent <id>, where <id> is the parent spark ID
 shown by list or JSON output.`,
@@ -43,9 +43,8 @@ shown by list or JSON output.`,
   sparks done 2`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList(cmd, args)
-		},
+		Args:          cobra.NoArgs,
+		RunE:          runInteractive,
 	}
 	root.SetOut(out)
 	root.SetErr(errOut)

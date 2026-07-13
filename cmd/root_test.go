@@ -151,7 +151,7 @@ func TestRootCommandHelpIsExplanatory(t *testing.T) {
 	}
 	for _, want := range []string{
 		"sparks captures ideas, tasks and nested thoughts",
-		"Run sparks with no command to list active items.",
+		"Run sparks with no command to start an interactive session.",
 		"Create sub-ideas with add --parent <id>",
 		"sparks add --parent 1 \"Document install steps\"",
 		"Available Commands:",
@@ -159,6 +159,82 @@ func TestRootCommandHelpIsExplanatory(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in help output: %q", want, out)
 		}
+	}
+}
+
+func TestRootCommandInteractiveSession(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "sparks.db")
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	root := NewRootCommand(&out, &errOut)
+	root.SetIn(strings.NewReader("add \"Interactive spark\"\ne 1 \"Updated spark\"\nlist\nexit\n"))
+	root.SetArgs([]string{"--db", dbPath})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("interactive session failed: %v\nstderr: %s", err, errOut.String())
+	}
+	for _, want := range []string{
+		"Interactive mode.",
+		"sparks> ",
+		"Added spark 1",
+		"Updated spark 1",
+		"Updated spark",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("expected %q in interactive output: %q", want, out.String())
+		}
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("unexpected interactive stderr: %q", errOut.String())
+	}
+}
+
+func TestRootCommandInteractiveSessionRecoversFromErrors(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "sparks.db")
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	root := NewRootCommand(&out, &errOut)
+	root.SetIn(strings.NewReader("done invalid\nadd \"Still running\"\nquit\n"))
+	root.SetArgs([]string{"--db", dbPath})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("interactive session failed: %v", err)
+	}
+	if !strings.Contains(errOut.String(), `invalid spark id "invalid"`) {
+		t.Fatalf("expected command error, got: %q", errOut.String())
+	}
+	if !strings.Contains(out.String(), "Added spark 1") {
+		t.Fatalf("expected session to continue, got: %q", out.String())
+	}
+}
+
+func TestRootCommandRejectsUnexpectedArguments(t *testing.T) {
+	_, _, err := runCommand(t, filepath.Join(t.TempDir(), "sparks.db"), "unexpected")
+	if err == nil {
+		t.Fatal("expected unexpected root argument to fail")
+	}
+}
+
+func TestParseInteractiveLine(t *testing.T) {
+	args, err := parseInteractiveLine(`edit 42 "new title"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"edit", "42", "new title"}
+	if len(args) != len(want) {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("arg %d = %q, want %q", i, args[i], want[i])
+		}
+	}
+	if _, err := parseInteractiveLine(`add "unfinished`); err == nil {
+		t.Fatal("expected unterminated quote error")
+	}
+	args, err = parseInteractiveLine(`add don't`)
+	if err != nil || len(args) != 2 || args[1] != "don't" {
+		t.Fatalf("expected apostrophe in unquoted word, got %#v, %v", args, err)
 	}
 }
 
