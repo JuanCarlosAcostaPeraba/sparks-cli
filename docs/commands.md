@@ -11,7 +11,13 @@ Use the arrow keys or `j`/`k` to select a spark. The available actions are:
 - `c`: add a child under the selected spark
 - `d`: complete the selected spark
 - `x`: remove the selected spark
+- `s` or `/`: search sparks in the current active/all view
+- `v`: toggle between active-only and all sparks
+- `C`: clear completed sparks after confirmation
 - `r`: refresh, `?`: help, `q`: quit
+
+The current view and search query are always displayed above the table. Press
+`Esc` while browsing search results to clear the query.
 
 Redirected input or output uses the compatible line prompt, which accepts any
 regular command without the leading `sparks` and exits with `exit` or `quit`.
