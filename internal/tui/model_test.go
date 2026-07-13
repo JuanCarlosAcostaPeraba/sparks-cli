@@ -81,6 +81,42 @@ func TestModelLoadsAndNavigatesSparks(t *testing.T) {
 	}
 }
 
+func TestModelColorHighlightsSelectionIDsImportantAndFeedback(t *testing.T) {
+	parentID := int64(1)
+	service := &fakeService{sparks: []model.Spark{
+		{ID: 1, Title: "Selected"},
+		{ID: 2, Title: "Important child", Important: true, ParentID: &parentID},
+	}}
+	m := loadModel(t, New(context.Background(), service, WithColor(true)))
+	m, _ = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
+	view := m.View()
+	for _, want := range []string{
+		"\x1b[1;35m",
+		"\x1b[1;30;46m",
+		"\x1b[36m#2\x1b[0m",
+		"\x1b[36m#1\x1b[0m",
+		"\x1b[1;33mimportant\x1b[0m",
+		"\x1b[35m?\x1b[0m",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("expected %q in colored TUI:\n%s", want, view)
+		}
+	}
+
+	m.status = "Error: unavailable"
+	if !strings.Contains(m.View(), "\x1b[31mError: unavailable\x1b[0m") {
+		t.Fatalf("error feedback was not colored:\n%s", m.View())
+	}
+}
+
+func TestModelWithoutColorContainsNoANSI(t *testing.T) {
+	service := &fakeService{sparks: []model.Spark{{ID: 1, Title: "Plain"}}}
+	m := loadModel(t, New(context.Background(), service, WithColor(false)))
+	if strings.Contains(m.View(), "\x1b[") {
+		t.Fatalf("plain TUI contains ANSI escapes:\n%s", m.View())
+	}
+}
+
 func TestModelAddsRootAndChild(t *testing.T) {
 	service := &fakeService{sparks: []model.Spark{{ID: 7, Title: "Parent"}}}
 	m := loadModel(t, New(context.Background(), service))

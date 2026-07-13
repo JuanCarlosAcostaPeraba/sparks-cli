@@ -24,7 +24,7 @@ spark's status, importance and parent-child relationships.`,
 				if err != nil {
 					return err
 				}
-				output.Message(stdout(cmd), "Updated spark %d", spark.ID)
+				output.Message(stdout(cmd), "Updated spark %s", output.ID(stdout(cmd), spark.ID))
 				return nil
 			})
 		},

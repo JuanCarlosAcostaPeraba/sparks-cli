@@ -47,6 +47,63 @@ func TestSparksJSONOutput(t *testing.T) {
 	}
 }
 
+func TestColoredSparksStylesIDsAndStatesWithoutBreakingAlignment(t *testing.T) {
+	sparks := []model.Spark{
+		{ID: 1, Title: "Active"},
+		{ID: 22, Title: "Important", Important: true},
+		{ID: 333, Title: "Completed", Done: true},
+	}
+	var buf bytes.Buffer
+	renderer := output.NewRenderer(&buf, true)
+	if err := renderer.Sparks(sparks, false); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	for _, want := range []string{
+		"\x1b[2mSTATUS  ID   TITLE\x1b[0m",
+		"\x1b[36m1\x1b[0m",
+		"\x1b[1;33m❗\x1b[0m",
+		"\x1b[1;33mImportant\x1b[0m",
+		"\x1b[32m☑\x1b[0m",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in colored output %q", want, got)
+		}
+	}
+	plain := stripANSI(got)
+	for _, want := range []string{"STATUS  ID   TITLE", "□       1    Active", "❗       22   Important", "☑       333  Completed"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("expected aligned %q in stripped output %q", want, plain)
+		}
+	}
+}
+
+func TestJSONNeverContainsColor(t *testing.T) {
+	var buf bytes.Buffer
+	renderer := output.NewRenderer(&buf, true)
+	if err := renderer.Sparks([]model.Spark{{ID: 1, Title: "Plain JSON"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "\x1b[") {
+		t.Fatalf("JSON contains ANSI escapes: %q", buf.String())
+	}
+}
+
+func TestColoredTreeAndMessageProvideVisualFeedback(t *testing.T) {
+	var buf bytes.Buffer
+	renderer := output.NewRenderer(&buf, true)
+	if err := renderer.Tree([]model.Spark{{ID: 1, Title: "Important", Important: true}}, false); err != nil {
+		t.Fatal(err)
+	}
+	renderer.Message("Added spark %s", renderer.ID(1))
+	got := buf.String()
+	for _, want := range []string{"\x1b[36m1\x1b[0m", "\x1b[1;33mImportant\x1b[0m", "\x1b[32m✓\x1b[0m"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in feedback %q", want, got)
+		}
+	}
+}
+
 func TestTreeUsesHierarchicalNumbers(t *testing.T) {
 	parentID := int64(10)
 	childID := int64(20)
@@ -65,5 +122,19 @@ func TestTreeUsesHierarchicalNumbers(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in output %q", want, got)
 		}
+	}
+}
+
+func stripANSI(value string) string {
+	for {
+		start := strings.Index(value, "\x1b[")
+		if start < 0 {
+			return value
+		}
+		end := strings.IndexByte(value[start:], 'm')
+		if end < 0 {
+			return value
+		}
+		value = value[:start] + value[start+end+1:]
 	}
 }

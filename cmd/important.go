@@ -25,9 +25,9 @@ removes the important mark.`,
 					return err
 				}
 				if spark.Important {
-					output.Message(stdout(cmd), "Marked spark %d as important", spark.ID)
+					output.Message(stdout(cmd), "Marked spark %s as important", output.ID(stdout(cmd), spark.ID))
 				} else {
-					output.Message(stdout(cmd), "Unmarked spark %d as important", spark.ID)
+					output.Message(stdout(cmd), "Unmarked spark %s as important", output.ID(stdout(cmd), spark.ID))
 				}
 				return nil
 			})

@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/app"
+	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/presentation"
 	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -37,7 +38,7 @@ func runTUI(cmd *cobra.Command) error {
 	defer closeFn()
 
 	program := tea.NewProgram(
-		tui.New(cmd.Context(), application),
+		tui.New(cmd.Context(), application, tui.WithColor(presentation.Allowed())),
 		tea.WithInput(cmd.InOrStdin()),
 		tea.WithOutput(stdout(cmd)),
 		tea.WithAltScreen(),

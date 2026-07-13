@@ -8,6 +8,7 @@ import (
 
 	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/app"
 	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/model"
+	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/presentation"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -48,6 +49,7 @@ type Model struct {
 	width   int
 	loading bool
 	status  string
+	palette presentation.Palette
 }
 
 type loadedMsg struct {
@@ -56,8 +58,20 @@ type loadedMsg struct {
 	status string
 }
 
-func New(ctx context.Context, service Service) Model {
-	return Model{ctx: ctx, service: service, loading: true}
+type Option func(*Model)
+
+func WithColor(enabled bool) Option {
+	return func(m *Model) {
+		m.palette.Enabled = enabled
+	}
+}
+
+func New(ctx context.Context, service Service, options ...Option) Model {
+	m := Model{ctx: ctx, service: service, loading: true}
+	for _, option := range options {
+		option(&m)
+	}
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -261,12 +275,14 @@ func (m Model) remove(spark model.Spark) tea.Cmd {
 
 func (m Model) View() string {
 	var view strings.Builder
-	view.WriteString(logo)
+	view.WriteString(m.palette.Paint(presentation.Logo, logo))
 	view.WriteString("\n\n  Capture ideas, tasks and nested thoughts without leaving the terminal.\n")
-	view.WriteString("  ↑/↓ or j/k navigate · a add · e edit · i important · c child · d done · x remove\n\n")
+	view.WriteString("  " + m.key("↑/↓") + " or " + m.key("j/k") + " navigate · " +
+		m.key("a") + " add · " + m.key("e") + " edit · " + m.key("i") + " important · " +
+		m.key("c") + " child · " + m.key("d") + " done · " + m.key("x") + " remove\n\n")
 
 	if m.mode == helpMode {
-		view.WriteString("  HELP\n")
+		view.WriteString(m.palette.Paint(presentation.Important, "  HELP") + "\n")
 		view.WriteString("  a add a root spark       e edit the selected spark\n")
 		view.WriteString("  c add a child            i toggle important\n")
 		view.WriteString("  d mark done              x remove\n")
@@ -275,14 +291,14 @@ func (m Model) View() string {
 		return view.String()
 	}
 
-	view.WriteString("  SEL  ID     STATE       TITLE")
+	view.WriteString(m.palette.Paint(presentation.Muted, "  SEL  ID     STATE       TITLE"))
 	if m.width >= 72 {
-		view.WriteString("                            PARENT")
+		view.WriteString(m.palette.Paint(presentation.Muted, "                            PARENT"))
 	}
 	view.WriteByte('\n')
-	view.WriteString("  ───  ─────  ──────────  ─────────────────────────────")
+	view.WriteString(m.palette.Paint(presentation.Muted, "  ───  ─────  ──────────  ─────────────────────────────"))
 	if m.width >= 72 {
-		view.WriteString("  ──────")
+		view.WriteString(m.palette.Paint(presentation.Muted, "  ──────"))
 	}
 	view.WriteByte('\n')
 
@@ -299,21 +315,27 @@ func (m Model) View() string {
 				state = "important"
 			}
 			title := truncate(spark.Title, 36)
-			fmt.Fprintf(&view, "   %s   #%-4d  %-10s  %-36s", pointer, spark.ID, state, title)
+			row := fmt.Sprintf("   %s   #%-4d  %-10s  %-36s", pointer, spark.ID, state, title)
 			if m.width >= 72 {
 				parent := "—"
 				if spark.ParentID != nil {
 					parent = fmt.Sprintf("#%d", *spark.ParentID)
 				}
-				fmt.Fprintf(&view, "  %s", parent)
+				row += "  " + parent
 			}
+			if index == m.cursor {
+				row = m.palette.Paint(presentation.Selected, row)
+			} else {
+				row = m.colorRow(row, spark)
+			}
+			view.WriteString(row)
 			view.WriteByte('\n')
 		}
 	}
 
 	view.WriteByte('\n')
 	if m.loading {
-		view.WriteString("  Working…\n")
+		view.WriteString(m.palette.Paint(presentation.Warning, "  Working…") + "\n")
 	}
 	switch m.mode {
 	case addMode:
@@ -325,11 +347,43 @@ func (m Model) View() string {
 		fmt.Fprintf(&view, "  Child of #%d: %s█\n", selected.ID, string(m.input))
 	default:
 		if m.status != "" {
-			fmt.Fprintf(&view, "  %s\n", m.status)
+			role := presentation.Success
+			if strings.HasPrefix(m.status, "Error:") {
+				role = presentation.Error
+			} else if m.status == "Cancelled" || m.status == "A title is required" {
+				role = presentation.Warning
+			}
+			fmt.Fprintf(&view, "  %s\n", m.palette.Paint(role, m.status))
 		}
-		view.WriteString("  ? help · r refresh · q quit\n")
+		view.WriteString("  " + m.key("?") + " help · " + m.key("r") + " refresh · " + m.key("q") + " quit\n")
 	}
 	return view.String()
+}
+
+func (m Model) key(value string) string {
+	return m.palette.Paint(presentation.Key, value)
+}
+
+func (m Model) colorRow(row string, spark model.Spark) string {
+	if spark.ParentID != nil {
+		parentID := fmt.Sprintf("#%d", *spark.ParentID)
+		parentStart := strings.LastIndex(row, parentID)
+		if parentStart >= 0 {
+			row = row[:parentStart] + m.palette.Paint(presentation.ID, parentID) + row[parentStart+len(parentID):]
+		}
+	}
+	id := fmt.Sprintf("#%d", spark.ID)
+	idStart := strings.Index(row, id)
+	if idStart >= 0 {
+		row = row[:idStart] + m.palette.Paint(presentation.ID, id) + row[idStart+len(id):]
+	}
+	if spark.Important {
+		stateStart := strings.Index(row, "important")
+		if stateStart >= 0 {
+			row = row[:stateStart] + m.palette.Paint(presentation.Important, "important") + row[stateStart+len("important"):]
+		}
+	}
+	return row
 }
 
 func truncate(value string, width int) string {

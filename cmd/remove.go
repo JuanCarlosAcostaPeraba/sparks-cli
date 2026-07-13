@@ -24,7 +24,7 @@ instead of being physically removed immediately.`,
 				if err := application.Remove(cmd.Context(), args[0]); err != nil {
 					return err
 				}
-				output.Message(stdout(cmd), "Removed spark %s", args[0])
+				output.Message(stdout(cmd), "Removed spark %s", output.ID(stdout(cmd), args[0]))
 				return nil
 			})
 		},
