@@ -41,8 +41,8 @@ joined into the spark title.
 ## Edit
 
 ```bash
-sparks edit 3 "Ship v0.2.0"
-sparks e 3 "Ship v0.2.0"
+sparks edit 3 "Ship v1.0.0"
+sparks e 3 "Ship v1.0.0"
 ```
 
 ## Complete
