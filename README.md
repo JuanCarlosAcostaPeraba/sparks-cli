@@ -31,12 +31,12 @@ The installer downloads the matching release archive, installs `sparks.exe` unde
 ### Options
 
 ```bash
-SPARKS_VERSION=1.1.0 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
+SPARKS_VERSION=1.1.1 curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
 SPARKS_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.sh | sh
 ```
 
 ```powershell
-$env:SPARKS_VERSION = "1.1.0"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
+$env:SPARKS_VERSION = "1.1.1"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
 $env:SPARKS_INSTALL_DIR = "$HOME\bin"; irm https://raw.githubusercontent.com/JuanCarlosAcostaPeraba/sparks-cli/main/scripts/install.ps1 | iex
 ```
 
@@ -126,11 +126,16 @@ executable.
 Releases are handled by GoReleaser. Tag-based GitHub Actions builds publish archives and checksums.
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.1.1
+git push origin v1.1.1
 ```
 
 ## Roadmap
+
+### v1.1.1 — updater reliability
+
+- Visible update progress and actionable errors
+- Windows release-download retries with a native `curl.exe` fallback
 
 ### v1.1.0 — TUI workflow
 

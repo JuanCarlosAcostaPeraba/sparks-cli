@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -28,6 +30,16 @@ const (
 	maxMetadataBytes = 5 << 20
 	maxArchiveBytes  = 200 << 20
 	maxBinaryBytes   = 100 << 20
+	maxDownloadTries = 3
+)
+
+type ProgressStage string
+
+const (
+	ProgressChecking    ProgressStage = "checking"
+	ProgressDownloading ProgressStage = "downloading"
+	ProgressVerifying   ProgressStage = "verifying"
+	ProgressInstalling  ProgressStage = "installing"
 )
 
 type Result struct {
@@ -37,6 +49,19 @@ type Result struct {
 }
 
 type applyFunc func(io.Reader, string, os.FileMode) error
+type downloadFunc func(context.Context, string, int64) ([]byte, error)
+
+type windowsReleaseTransport struct {
+	standard http.RoundTripper
+	assets   http.RoundTripper
+}
+
+func (t windowsReleaseTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if strings.EqualFold(req.URL.Hostname(), "release-assets.githubusercontent.com") {
+		return t.assets.RoundTrip(req)
+	}
+	return t.standard.RoundTrip(req)
+}
 
 type Updater struct {
 	currentVersion string
@@ -46,6 +71,8 @@ type Updater struct {
 	executablePath string
 	client         *http.Client
 	apply          applyFunc
+	progress       func(ProgressStage)
+	fallback       downloadFunc
 }
 
 type release struct {
@@ -59,15 +86,38 @@ type releaseAsset struct {
 }
 
 func New(currentVersion string) *Updater {
-	return &Updater{
+	var transport http.RoundTripper = http.DefaultTransport
+	if runtime.GOOS == "windows" {
+		assets := http.DefaultTransport.(*http.Transport).Clone()
+		assets.ForceAttemptHTTP2 = false
+		assets.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12}
+		assets.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+		transport = windowsReleaseTransport{standard: http.DefaultTransport, assets: assets}
+	}
+	updater := &Updater{
 		currentVersion: currentVersion,
 		apiURL:         defaultAPIURL,
 		goos:           runtime.GOOS,
 		goarch:         runtime.GOARCH,
-		client:         &http.Client{Timeout: 30 * time.Second},
+		client:         &http.Client{Timeout: 2 * time.Minute, Transport: transport},
 		apply: func(binary io.Reader, target string, mode os.FileMode) error {
 			return selfupdate.Apply(binary, selfupdate.Options{TargetPath: target, TargetMode: mode})
 		},
+	}
+	if runtime.GOOS == "windows" {
+		updater.fallback = curlDownload
+	}
+	return updater
+}
+
+func (u *Updater) OnProgress(progress func(ProgressStage)) *Updater {
+	u.progress = progress
+	return u
+}
+
+func (u *Updater) report(stage ProgressStage) {
+	if u.progress != nil {
+		u.progress(stage)
 	}
 }
 
@@ -77,6 +127,7 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 		return Result{}, fmt.Errorf("read current version: %w", err)
 	}
 
+	u.report(ProgressChecking)
 	release, err := u.latestRelease(ctx)
 	if err != nil {
 		return Result{}, err
@@ -104,6 +155,7 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 		return Result{}, errors.New("release asset \"checksums.txt\" not found")
 	}
 
+	u.report(ProgressDownloading)
 	archive, err := u.download(ctx, archiveURL, maxArchiveBytes)
 	if err != nil {
 		return Result{}, fmt.Errorf("download %s: %w", archiveName, err)
@@ -112,6 +164,7 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("download checksums: %w", err)
 	}
+	u.report(ProgressVerifying)
 	if err := verifyChecksum(archiveName, archive, checksums); err != nil {
 		return Result{}, err
 	}
@@ -124,6 +177,7 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	u.report(ProgressInstalling)
 	if err := u.apply(bytes.NewReader(binary), target, mode); err != nil {
 		return Result{}, fmt.Errorf("replace executable: %w", err)
 	}
@@ -148,9 +202,90 @@ func (u *Updater) latestRelease(ctx context.Context) (release, error) {
 }
 
 func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte, error) {
+	var lastErr error
+	fallbackAllowed := false
+	for attempt := 1; attempt <= maxDownloadTries; attempt++ {
+		data, retry, err := u.downloadOnce(ctx, url, limit)
+		if err == nil {
+			return data, nil
+		}
+		lastErr = err
+		fallbackAllowed = retry
+		if !retry || attempt == maxDownloadTries {
+			break
+		}
+		timer := time.NewTimer(time.Duration(attempt) * 250 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	if u.fallback != nil && fallbackAllowed {
+		data, err := u.fallback(ctx, url, limit)
+		if err == nil {
+			return data, nil
+		}
+		return nil, fmt.Errorf("%v; Windows download fallback: %w", lastErr, err)
+	}
+	return nil, lastErr
+}
+
+func curlDownload(ctx context.Context, url string, limit int64) ([]byte, error) {
+	temporary, err := os.CreateTemp("", "sparks-update-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temporary download: %w", err)
+	}
+	path := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("close temporary download: %w", err)
+	}
+	defer os.Remove(path)
+
+	args := []string{
+		"-fsSL",
+		"-4",
+		"--retry", "3",
+		"--connect-timeout", "20",
+		"--max-time", "120",
+		"--http1.1",
+		"--tlsv1.2",
+		"--ssl-no-revoke",
+		"--max-filesize", strconv.FormatInt(limit, 10),
+		"-o", path,
+		url,
+	}
+	command := exec.CommandContext(ctx, "curl.exe", args...)
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail == "" {
+			detail = err.Error()
+		}
+		return nil, errors.New(detail)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("inspect temporary download: %w", err)
+	}
+	if info.Size() > limit {
+		return nil, fmt.Errorf("response exceeds %d bytes", limit)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read temporary download: %w", err)
+	}
+	return data, nil
+}
+
+func (u *Updater) downloadOnce(ctx context.Context, url string, limit int64) ([]byte, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
@@ -158,21 +293,22 @@ func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte
 
 	resp, err := u.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, ctx.Err() == nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned %s", resp.Status)
+		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError
+		return nil, retry, fmt.Errorf("server returned %s", resp.Status)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
-		return nil, err
+		return nil, ctx.Err() == nil, err
 	}
 	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("response exceeds %d bytes", limit)
+		return nil, false, fmt.Errorf("response exceeds %d bytes", limit)
 	}
-	return data, nil
+	return data, false, nil
 }
 
 func (u *Updater) target() (string, os.FileMode, error) {

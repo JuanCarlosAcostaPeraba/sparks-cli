@@ -19,7 +19,16 @@ published by GoReleaser. The executable directory must be writable.`,
 		Example: `  sparks update`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			result, err := updater.New(version).Update(cmd.Context())
+			client := updater.New(version).OnProgress(func(stage updater.ProgressStage) {
+				messages := map[updater.ProgressStage]string{
+					updater.ProgressChecking:    "Checking for updates...",
+					updater.ProgressDownloading: "Downloading update...",
+					updater.ProgressVerifying:   "Verifying checksum...",
+					updater.ProgressInstalling:  "Installing update...",
+				}
+				output.Message(stdout(cmd), "%s", messages[stage])
+			})
+			result, err := client.Update(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("update sparks: %w", err)
 			}
