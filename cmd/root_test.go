@@ -10,7 +10,7 @@ import (
 func TestRootCommandAddAndList(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "sparks.db")
 
-	out, errOut, err := runCommand(t, dbPath, "add", "Prepare Codex prompt")
+	out, errOut, err := runCommand(t, dbPath, "add", "Prepare", "Codex", "prompt")
 	if err != nil {
 		t.Fatalf("add failed: %v\nstderr: %s", err, errOut)
 	}
@@ -131,7 +131,7 @@ func TestRootCommandAddsChildSpark(t *testing.T) {
 	if _, _, err := runCommand(t, dbPath, "add", "Parent idea"); err != nil {
 		t.Fatal(err)
 	}
-	if _, errOut, err := runCommand(t, dbPath, "add", "--parent", "1", "Child idea"); err != nil {
+	if _, errOut, err := runCommand(t, dbPath, "add", "--parent", "1", "Child", "idea"); err != nil {
 		t.Fatalf("add child failed: %v\nstderr: %s", err, errOut)
 	}
 
@@ -246,7 +246,7 @@ func TestAddAliasHelpIsCommandSpecific(t *testing.T) {
 	for _, want := range []string{
 		"Add a new spark from a short piece of text.",
 		"To create a sub-idea, pass --parent",
-		"sparks + \"Fix install docs\"",
+		"sparks + Fix install docs",
 		"--parent string   add as a child of the given spark ID",
 	} {
 		if !strings.Contains(out, want) {
