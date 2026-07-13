@@ -4,14 +4,51 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"unicode"
 
 	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/app"
+	"github.com/JuanCarlosAcostaPeraba/sparks-cli/internal/tui"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func runInteractive(cmd *cobra.Command, _ []string) error {
+	if isInteractiveTerminal(cmd) {
+		return runTUI(cmd)
+	}
+	return runLineInteractive(cmd)
+}
+
+func isInteractiveTerminal(cmd *cobra.Command) bool {
+	in, inputIsFile := cmd.InOrStdin().(*os.File)
+	out, outputIsFile := stdout(cmd).(*os.File)
+	return inputIsFile && outputIsFile &&
+		term.IsTerminal(int(in.Fd())) && term.IsTerminal(int(out.Fd()))
+}
+
+func runTUI(cmd *cobra.Command) error {
+	application, closeFn, err := newApp(cmd)
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+
+	program := tea.NewProgram(
+		tui.New(cmd.Context(), application),
+		tea.WithInput(cmd.InOrStdin()),
+		tea.WithOutput(stdout(cmd)),
+		tea.WithAltScreen(),
+	)
+	if _, err := program.Run(); err != nil {
+		return fmt.Errorf("run interactive interface: %w", err)
+	}
+	return nil
+}
+
+func runLineInteractive(cmd *cobra.Command) error {
 	if err := executeInteractiveCommand(cmd, []string{"list"}); err != nil {
 		return err
 	}

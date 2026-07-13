@@ -2,16 +2,19 @@
 
 ## Interactive mode
 
-Run `sparks` without a subcommand to list active sparks and open an interactive
-prompt. Enter any regular command without the leading `sparks`, then use `exit`
-or `quit` to finish.
+Run `sparks` without a subcommand to open the full-screen interactive table.
+Use the arrow keys or `j`/`k` to select a spark. The available actions are:
 
-```txt
-sparks> add "Prepare release notes"
-sparks> edit 1 "Prepare v0.2.0 release notes"
-sparks> done 1
-sparks> exit
-```
+- `a`: add a root spark
+- `e`: edit the selected spark
+- `i`: toggle the selected spark's importance
+- `c`: add a child under the selected spark
+- `d`: complete the selected spark
+- `x`: remove the selected spark
+- `r`: refresh, `?`: help, `q`: quit
+
+Redirected input or output uses the compatible line prompt, which accepts any
+regular command without the leading `sparks` and exits with `exit` or `quit`.
 
 ## List
 

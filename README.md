@@ -68,16 +68,19 @@ sparks update
 sparks version
 ```
 
-The default command starts an interactive session. It shows active sparks and
-accepts the same commands until you type `exit` or `quit`.
+The default command opens a full-screen interactive table when the terminal is
+interactive. Navigate with the arrow keys or `j`/`k`; use `a` to add, `e` to
+edit, `i` to toggle importance, `c` to add a child to the selected spark, `d`
+to complete, and `x` to remove. Press `?` for help or `q` to quit.
 
 ```txt
-sparks> add "Prepare release notes"
-Added spark 1
-sparks> done 1
-Completed spark 1
-sparks> exit
+  SEL  ID     STATE       TITLE
+   >   #1     active      Prepare release notes
+       #2     important   Publish Homebrew tap
 ```
+
+When input or output is redirected, `sparks` keeps the line-based interactive
+fallback so scripts can send regular commands followed by `exit` or `quit`.
 
 ```txt
 STATUS  ID  TITLE
